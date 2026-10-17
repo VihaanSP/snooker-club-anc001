@@ -30,7 +30,7 @@ alter table if exists public.settings add column if not exists data jsonb;
 alter table if exists public.game_tables add column if not exists data jsonb;
 alter table if exists public.table_types add column if not exists data jsonb;
 
--- 3. Relax strict constraints on bookings & visits so frontend models insert smoothly
+-- 3. Relax strict constraints on bookings, payments & visits so frontend models insert smoothly
 do $$
 begin
   alter table if exists public.bookings alter column hold_range drop not null;
@@ -39,6 +39,18 @@ begin
   alter table if exists public.bookings alter column table_id type text using table_id::text;
   alter table if exists public.bookings alter column customer_id type text using customer_id::text;
   alter table if exists public.bookings drop constraint if exists no_overlap;
+
+  alter table if exists public.payments alter column booking_id drop not null;
+  alter table if exists public.payments alter column customer_id drop not null;
+  alter table if exists public.payments alter column booking_id type text using booking_id::text;
+  alter table if exists public.payments alter column customer_id type text using customer_id::text;
+
+  alter table if exists public.visits alter column booking_id drop not null;
+  alter table if exists public.visits alter column customer_id drop not null;
+  alter table if exists public.visits alter column table_id drop not null;
+  alter table if exists public.visits alter column table_id type text using table_id::text;
+  alter table if exists public.visits alter column booking_id type text using booking_id::text;
+  alter table if exists public.visits alter column customer_id type text using customer_id::text;
 exception when others then
   raise notice 'Constraints relaxation: %', sqlerrm;
 end $$;

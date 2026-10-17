@@ -1439,7 +1439,7 @@
             tableId: item.tableId
           };
 
-          return {
+          const payload = {
             booking_code: item.id || `BK-${Math.floor(100000 + Math.random() * 900000)}`,
             kind: item.kind || 'online',
             booking_type: item.depositPaid ? 'prepaid' : 'pay_at_club',
@@ -1454,6 +1454,8 @@
             deposit_status: item.depositPaid ? 'paid' : 'pending',
             note: JSON.stringify(extraData)
           };
+          if (item.tableId) payload.table_id = item.tableId;
+          return payload;
         },
         fromDB(row) {
           let extra = {};
@@ -1475,7 +1477,7 @@
           return {
             id: row.booking_code || extra.id || row.id,
             dbId: row.id,
-            tableId: extra.tableId || 'T3',
+            tableId: row.table_id || extra.tableId || 'T3',
             date: extra.date || dateStr,
             start: extra.start || startHM,
             end: extra.end || endHM,
