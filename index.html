@@ -1381,25 +1381,316 @@
       }
     };
 
+    /* ==========================================================================
+       SCHEMA FIELD MAPPER (EXACT LIVE POSTGRES COLUMNS + JSONB/NOTES FOLDING)
+       ========================================================================== */
+    const FIELD_MAPS = {
+      tables: {
+        table: 'tables',
+        toDB(item) {
+          const isSnooker = (item.type === 'snooker') || (item.discipline === 'snooker') || (item.name && item.name.toLowerCase().includes('snooker'));
+          return {
+            id: item.id,
+            name: item.name || item.id,
+            type: isSnooker ? 'snooker' : 'pool',
+            rate_per_hour: item.ratePerHour !== undefined ? Number(item.ratePerHour) : (Number(item.rate_per_hour) || 200),
+            status: item.statusOverride || item.status || 'active'
+          };
+        },
+        fromDB(row) {
+          const extra = row.data || {};
+          const isSnooker = row.type === 'snooker' || (row.name && row.name.toLowerCase().includes('snooker'));
+          return {
+            id: row.id,
+            name: row.name || row.id,
+            type: row.type || (isSnooker ? 'snooker' : 'pool'),
+            discipline: extra.discipline || row.type || (isSnooker ? 'snooker' : 'pool'),
+            ratePerHour: row.rate_per_hour !== undefined ? Number(row.rate_per_hour) : 200,
+            rate_per_hour: row.rate_per_hour !== undefined ? Number(row.rate_per_hour) : 200,
+            status: row.status || 'active',
+            statusOverride: row.status === 'maintenance' ? 'maintenance' : null,
+            size: extra.size || (isSnooker ? '12ft Championship' : '9ft Pro'),
+            specs: extra.specs || (isSnooker ? 'Strachan 6811 Gold Tournament cloth' : 'Simonis 860 Tournament Blue felt')
+          };
+        }
+      },
+
+      bookings: {
+        table: 'bookings',
+        toDB(item) {
+          const startIso = (item.date && item.start) ? new Date(`${item.date}T${item.start}:00`).toISOString() : (item.start_at || new Date().toISOString());
+          const endIso = (item.date && item.end) ? new Date(`${item.date}T${item.end}:00`).toISOString() : (item.end_at || new Date(new Date(startIso).getTime() + (item.durMin || 60) * 60000).toISOString());
+          const price = item.priceQuote ? Number(item.priceQuote.subtotal) : (Number(item.price_quote) || 375);
+          const dep = item.depositAmount !== undefined ? Number(item.depositAmount) : (item.priceQuote ? Number(item.priceQuote.deposit) : 75);
+
+          const extraData = {
+            patronName: item.patronName,
+            patronPhone: item.patronPhone,
+            cueSpecs: item.cueSpecs,
+            addons: item.addons || [],
+            pin: item.pin,
+            priceQuote: item.priceQuote,
+            depositPaid: item.depositPaid || false,
+            balanceDue: item.balanceDue !== undefined ? item.balanceDue : (price - dep),
+            date: item.date,
+            start: item.start,
+            end: item.end,
+            durMin: item.durMin,
+            tableId: item.tableId
+          };
+
+          return {
+            booking_code: item.id || `BK-${Math.floor(100000 + Math.random() * 900000)}`,
+            kind: item.kind || 'online',
+            booking_type: item.depositPaid ? 'prepaid' : 'pay_at_club',
+            status: item.status || 'confirmed',
+            start_at: startIso,
+            end_at: endIso,
+            scheduled_end_at: endIso,
+            booked_minutes: item.durMin || 60,
+            extended_minutes: item.extendedMinutes || 0,
+            price_quote: price,
+            deposit_amount: dep,
+            deposit_status: item.depositPaid ? 'paid' : 'pending',
+            note: JSON.stringify(extraData)
+          };
+        },
+        fromDB(row) {
+          let extra = {};
+          if (row.note) {
+            try { extra = JSON.parse(row.note); } catch(e) {}
+          }
+          if (row.data) {
+            extra = { ...extra, ...row.data };
+          }
+          const startD = new Date(row.start_at);
+          const endD = new Date(row.end_at);
+          const startHM = `${String(startD.getHours()).padStart(2,'0')}:${String(startD.getMinutes()).padStart(2,'0')}`;
+          const endHM = `${String(endD.getHours()).padStart(2,'0')}:${String(endD.getMinutes()).padStart(2,'0')}`;
+          const dateStr = `${startD.getFullYear()}-${String(startD.getMonth()+1).padStart(2,'0')}-${String(startD.getDate()).padStart(2,'0')}`;
+
+          const price = Number(row.price_quote) || (extra.priceQuote ? extra.priceQuote.subtotal : 375);
+          const dep = Number(row.deposit_amount) || (extra.priceQuote ? extra.priceQuote.deposit : 75);
+
+          return {
+            id: row.booking_code || extra.id || row.id,
+            dbId: row.id,
+            tableId: extra.tableId || 'T3',
+            date: extra.date || dateStr,
+            start: extra.start || startHM,
+            end: extra.end || endHM,
+            durMin: row.booked_minutes || extra.durMin || 60,
+            patronName: extra.patronName || 'Patron',
+            patronPhone: extra.patronPhone || '9810123456',
+            cueSpecs: extra.cueSpecs || 'Standard Ash Cue',
+            addons: extra.addons || [],
+            priceQuote: extra.priceQuote || {
+              baseRate: 300,
+              subtotal: price,
+              deposit: dep,
+              balanceDue: price - dep
+            },
+            status: row.status || 'confirmed',
+            depositPaid: row.deposit_status === 'paid' || extra.depositPaid || false,
+            depositAmount: dep,
+            balanceDue: extra.balanceDue !== undefined ? extra.balanceDue : (price - dep),
+            createdAt: row.created_at || new Date().toISOString(),
+            pin: extra.pin || '2468'
+          };
+        }
+      },
+
+      customers: {
+        table: 'customers',
+        toDB(item) {
+          const extraData = {
+            dues: item.dues || 0,
+            spend: item.spend || 0,
+            visits: item.visits || 0,
+            minutes: item.minutes || 0,
+            loyalty: item.loyalty || 'Patron',
+            sessions: item.sessions || [],
+            lastVisit: item.lastVisit
+          };
+          return {
+            name: item.name || 'Patron',
+            phone: item.phone,
+            customer_code: item.customerCode || `CUS-${item.phone ? item.phone.slice(-4) : '0000'}`,
+            no_show_count: item.noShows || 0,
+            notes: JSON.stringify(extraData)
+          };
+        },
+        fromDB(row) {
+          let extra = {};
+          if (row.notes) {
+            try { extra = JSON.parse(row.notes); } catch(e) {}
+          }
+          if (row.data) {
+            extra = { ...extra, ...row.data };
+          }
+          return {
+            id: row.phone || row.id,
+            dbId: row.id,
+            phone: row.phone,
+            name: row.name,
+            customerCode: row.customer_code,
+            visits: extra.visits || 0,
+            minutes: extra.minutes || 0,
+            spend: extra.spend || 0,
+            dues: extra.dues || 0,
+            noShows: row.no_show_count || 0,
+            loyalty: extra.loyalty || 'Patron',
+            sessions: extra.sessions || [],
+            lastVisit: extra.lastVisit || row.created_at
+          };
+        }
+      },
+
+      activity_log: {
+        table: 'activity_log',
+        toDB(item) {
+          return {
+            actor_type: item.actor || item.actor_type || 'staff',
+            action: item.action || 'LOG',
+            entity: item.entity || 'app',
+            detail: typeof item.detail === 'object' ? item.detail : { message: item.detail || '' },
+            at: item.timestamp || new Date().toISOString()
+          };
+        },
+        fromDB(row) {
+          return {
+            id: row.id,
+            timestamp: row.at || row.created_at,
+            actor: row.actor_type || 'staff',
+            action: row.action,
+            detail: typeof row.detail === 'object' ? (row.detail.message || JSON.stringify(row.detail)) : row.detail
+          };
+        }
+      },
+
+      payments: {
+        table: 'payments',
+        toDB(item) {
+          const extraData = {
+            receiptId: item.id,
+            visitId: item.visitId,
+            bookingId: item.bookingId,
+            patronName: item.patronName,
+            patronPhone: item.patronPhone,
+            tableId: item.tableId,
+            playedMins: item.playedMins,
+            tableCost: item.tableCost,
+            fnb: item.fnb,
+            deposit: item.deposit,
+            totalDue: item.totalDue,
+            amountPaid: item.amountPaid,
+            due: item.due,
+            paymentMethod: item.paymentMethod,
+            timestamp: item.timestamp
+          };
+          return {
+            reference: item.id,
+            kind: 'payment',
+            mode: (item.paymentMethod || 'cash').toLowerCase(),
+            amount: Number(item.amountPaid) || 0,
+            note: JSON.stringify(extraData)
+          };
+        },
+        fromDB(row) {
+          let extra = {};
+          if (row.note) {
+            try { extra = JSON.parse(row.note); } catch(e) {}
+          }
+          if (row.data) {
+            extra = { ...extra, ...row.data };
+          }
+          return {
+            id: extra.receiptId || row.reference || row.id,
+            dbId: row.id,
+            visitId: extra.visitId,
+            bookingId: extra.bookingId,
+            patronName: extra.patronName || 'Patron',
+            patronPhone: extra.patronPhone || '',
+            tableId: extra.tableId || 'T1',
+            playedMins: extra.playedMins || 60,
+            tableCost: extra.tableCost || Number(row.amount) || 0,
+            fnb: extra.fnb || 0,
+            deposit: extra.deposit || 0,
+            totalDue: extra.totalDue || Number(row.amount) || 0,
+            amountPaid: extra.amountPaid || Number(row.amount) || 0,
+            due: extra.due || 0,
+            paymentMethod: extra.paymentMethod || (row.mode ? row.mode.toUpperCase() : 'UPI'),
+            timestamp: extra.timestamp || row.created_at
+          };
+        }
+      },
+
+      visits: {
+        table: 'visits',
+        toDB(item) {
+          return {
+            id: item.id,
+            table_id: item.tableId,
+            kind: item.bookingId ? 'online' : 'walkin',
+            date: item.startTime ? item.startTime.slice(0, 10) : getTodayDateString(),
+            start_at: item.startTime,
+            paused_sec: item.pauseElapsedSec || 0,
+            booked_min: item.allocatedDurationMin || 60,
+            flags: {
+              patronName: item.patronName,
+              patronPhone: item.patronPhone,
+              paused: item.paused || false,
+              fnbTotal: item.fnbTotal || 0,
+              depositCredited: item.depositCredited || 0
+            }
+          };
+        },
+        fromDB(row) {
+          const flags = row.flags || {};
+          return {
+            id: row.id,
+            tableId: row.table_id || 'T1',
+            bookingId: row.booking_id,
+            patronName: flags.patronName || 'Guest',
+            patronPhone: flags.patronPhone || '9810123456',
+            startTime: row.start_at || new Date().toISOString(),
+            allocatedDurationMin: row.booked_min || 60,
+            paused: flags.paused || false,
+            pauseElapsedSec: row.paused_sec || 0,
+            fnbTotal: flags.fnbTotal || 0,
+            depositCredited: flags.depositCredited || 0
+          };
+        }
+      },
+
+      settings: {
+        table: 'settings',
+        toDB(item) {
+          return { id: 1, data: item };
+        },
+        fromDB(row) {
+          return row.data || {};
+        }
+      }
+    };
+
     // SupabaseStore Implementation
     const SupabaseStore = {
       client: null,
+      getMap(col) {
+        const key = col === 'log' ? 'activity_log' : col;
+        return FIELD_MAPS[key] || { table: key, toDB: x => x, fromDB: x => x };
+      },
       async list(collection) {
         try {
           if (collection === 'settings' || collection === 'rules' || collection === 'club') {
             const item = await this.get(collection, collection);
             return item ? [item] : [];
           }
-          const table = collection === 'log' ? 'activity_log' : collection;
-          const { data, error } = await this.client.from(table).select('*');
+          const map = this.getMap(collection);
+          const { data, error } = await this.client.from(map.table).select('*');
           if (error) throw error;
-          if (collection === 'tables' && data) {
-            return data.map(t => ({
-              ...t,
-              ratePerHour: t.rate_per_hour !== undefined ? t.rate_per_hour : (t.ratePerHour || 200)
-            }));
-          }
-          return data || [];
+          return (data || []).map(row => map.fromDB(row));
         } catch (err) {
           console.warn(`Supabase list(${collection}) fallback to LocalStore:`, err.message);
           return LocalStore.list(collection);
@@ -1418,16 +1709,18 @@
             }
             return null;
           }
-          const table = collection === 'log' ? 'activity_log' : collection;
-          const { data, error } = await this.client.from(table).select('*').eq('id', id).maybeSingle();
-          if (error) throw error;
-          if (collection === 'tables' && data) {
-            return {
-              ...data,
-              ratePerHour: data.rate_per_hour !== undefined ? data.rate_per_hour : (data.ratePerHour || 200)
-            };
+          const map = this.getMap(collection);
+          let query = this.client.from(map.table).select('*');
+          if (collection === 'bookings') {
+            query = query.or(`booking_code.eq.${id},id.eq.${id}`);
+          } else if (collection === 'customers') {
+            query = query.or(`phone.eq.${id},id.eq.${id}`);
+          } else {
+            query = query.eq('id', id);
           }
-          return data;
+          const { data, error } = await query.maybeSingle();
+          if (error) throw error;
+          return data ? map.fromDB(data) : null;
         } catch (err) {
           console.warn(`Supabase get(${collection}, ${id}) fallback to LocalStore:`, err.message);
           return LocalStore.get(collection, id);
@@ -1445,20 +1738,21 @@
             await this.client.from('settings').upsert({ id: 1, data: current });
             return item;
           }
-          const table = collection === 'log' ? 'activity_log' : collection;
-          let row = { ...item };
-          if (collection === 'tables') {
-            row.rate_per_hour = item.ratePerHour !== undefined ? item.ratePerHour : item.rate_per_hour;
-          } else if (collection === 'log') {
-            row = {
-              actor: item.actor || 'system',
-              action: item.action || 'LOG',
-              detail: item.detail || JSON.stringify(item)
-            };
+          const map = this.getMap(collection);
+          const dbPayload = map.toDB(item);
+
+          let res;
+          if (collection === 'bookings') {
+            res = await this.client.from(map.table).upsert(dbPayload, { onConflict: 'booking_code' }).select().maybeSingle();
+          } else if (collection === 'customers') {
+            res = await this.client.from(map.table).upsert(dbPayload, { onConflict: 'phone' }).select().maybeSingle();
+          } else if (collection === 'payments' || collection === 'log') {
+            res = await this.client.from(map.table).insert(dbPayload).select().maybeSingle();
+          } else {
+            res = await this.client.from(map.table).upsert(dbPayload).select().maybeSingle();
           }
-          const { data, error } = await this.client.from(table).upsert(row).select().maybeSingle();
-          if (error) throw error;
-          return data || item;
+          if (res.error) throw res.error;
+          return res.data ? map.fromDB(res.data) : item;
         } catch (err) {
           console.warn(`Supabase put(${collection}) fallback to LocalStore:`, err.message);
           return LocalStore.put(collection, item);
@@ -1466,8 +1760,16 @@
       },
       async del(collection, id) {
         try {
-          const table = collection === 'log' ? 'activity_log' : collection;
-          const { error } = await this.client.from(table).delete().eq('id', id);
+          const map = this.getMap(collection);
+          let query = this.client.from(map.table).delete();
+          if (collection === 'bookings') {
+            query = query.or(`booking_code.eq.${id},id.eq.${id}`);
+          } else if (collection === 'customers') {
+            query = query.or(`phone.eq.${id},id.eq.${id}`);
+          } else {
+            query = query.eq('id', id);
+          }
+          const { error } = await query;
           if (error) throw error;
           return true;
         } catch (err) {
@@ -2174,15 +2476,15 @@
         card.className = "spotlight-card discipline-card";
         card.innerHTML = `
           <div class="discipline-top">
-            <span class="discipline-badge">${t.discipline.toUpperCase()} • ${t.size}</span>
+            <span class="discipline-badge">${(t.discipline || t.type || 'Pool').toUpperCase()} • ${t.size || 'Standard'}</span>
             <div class="price-tag shiny-sweep">
-              <span class="price-curr tabular">₹${t.ratePerHour}</span>
+              <span class="price-curr tabular">₹${t.ratePerHour || 200}</span>
               <span class="price-unit">/ hr</span>
             </div>
           </div>
           <div>
             <h3 style="font-size:1.4rem; margin-bottom:8px;">${t.name}</h3>
-            <p style="color:var(--text-secondary); font-size:0.85rem; line-height:1.6; margin-bottom:18px;">${t.specs}</p>
+            <p style="color:var(--text-secondary); font-size:0.85rem; line-height:1.6; margin-bottom:18px;">${t.specs || ''}</p>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-subtle); padding-top:16px;">
             <span style="font-size:0.75rem; color:var(--text-muted);">10m Turnaround Buffer</span>
@@ -2284,10 +2586,10 @@
           onBookingInputsChanged();
         };
         card.innerHTML = `
-          <div style="font-size:0.75rem; color:var(--gold-accent); font-weight:700;">${t.id} • ${t.discipline.toUpperCase()}</div>
+          <div style="font-size:0.75rem; color:var(--gold-accent); font-weight:700;">${t.id} • ${(t.discipline || t.type || 'Pool').toUpperCase()}</div>
           <h4 style="font-size:1.15rem; margin:4px 0;">${t.name}</h4>
-          <div class="tabular" style="color:var(--emerald-primary); font-weight:600; margin-bottom:6px;">₹${t.ratePerHour} / hr</div>
-          <p style="font-size:0.75rem; color:var(--text-muted);">${t.specs}</p>
+          <div class="tabular" style="color:var(--emerald-primary); font-weight:600; margin-bottom:6px;">₹${t.ratePerHour || 200} / hr</div>
+          <p style="font-size:0.75rem; color:var(--text-muted);">${t.specs || ''}</p>
         `;
         picker.appendChild(card);
       });
@@ -2513,7 +2815,7 @@
               <h3 style="font-size:1.3rem;">${table ? table.name : b.tableId}</h3>
             </div>
             <div style="text-align:right;">
-              <span class="status-badge ${b.status === 'confirmed' ? 'status-available' : (b.status === 'no_show' ? 'status-inplay' : 'status-maintenance')}">${b.status.toUpperCase()}</span>
+              <span class="status-badge ${b.status === 'confirmed' ? 'status-available' : (b.status === 'no_show' ? 'status-inplay' : 'status-maintenance')}">${(b.status || 'confirmed').toUpperCase()}</span>
               ${countdownHTML ? `<div style="font-size:0.72rem; margin-top:4px;">${countdownHTML}</div>` : ''}
             </div>
           </div>
