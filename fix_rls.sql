@@ -36,6 +36,8 @@ begin
   alter table if exists public.bookings alter column hold_range drop not null;
   alter table if exists public.bookings alter column table_id drop not null;
   alter table if exists public.bookings alter column customer_id drop not null;
+  alter table if exists public.bookings alter column table_id type text using table_id::text;
+  alter table if exists public.bookings alter column customer_id type text using customer_id::text;
   alter table if exists public.bookings drop constraint if exists no_overlap;
 exception when others then
   raise notice 'Constraints relaxation: %', sqlerrm;
