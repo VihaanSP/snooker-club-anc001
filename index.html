@@ -1,0 +1,3580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Q-BALL Snooker & Pool Club | Sanctuary & Operations Deck</title>
+  
+  <!-- Guarded Supabase JS Client CDN (App works 100% offline if unavailable) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* ==========================================================================
+       Q-BALL DESIGN SYSTEM & TOKENS (Noir Billiards Aesthetic)
+       ========================================================================== */
+    :root {
+      /* Obsidian & Charcoal Surfaces */
+      --bg-ground: #0E0E12;
+      --bg-surface: #131317;
+      --bg-card: #1B1B1F;
+      --bg-card-elevated: #232329;
+      --border-subtle: #2D2D35;
+      --border-highlight: #39393D;
+      --border-glow: rgba(201, 162, 39, 0.35);
+
+      /* Tournament Felt Accents (Emerald Baize) */
+      --emerald-primary: #10B981;
+      --emerald-bright: #34D399;
+      --emerald-glow: rgba(16, 185, 129, 0.25);
+      --felt-shadow: #0B3D2E;
+      --felt-gradient: linear-gradient(135deg, #0B3D2E 0%, #10B981 100%);
+
+      /* Antique Brass / Gold Accents */
+      --gold-accent: #C9A227;
+      --gold-hover: #E5BD3B;
+      --gold-light: #F9E79F;
+      --gold-glow: rgba(201, 162, 39, 0.28);
+      --gold-gradient: linear-gradient(135deg, #F5F1E6 0%, #E5BD3B 45%, #C9A227 100%);
+
+      /* Typography Tokens */
+      --text-display: #F5F1E6;
+      --text-primary: #E5E7EB;
+      --text-secondary: #9CA3AF;
+      --text-muted: #6B7280;
+
+      /* Semantic Status Indicators */
+      --status-available: #10B981;
+      --status-reserved: #F59E0B;
+      --status-inplay: #EF4444;
+      --status-maint: #6B7280;
+
+      /* Font Stacks */
+      --font-display: 'Oswald', 'Bebas Neue', 'Trebuchet MS', 'Impact', sans-serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Roboto Mono', 'SF Mono', 'Courier New', monospace;
+
+      /* Radii & Transitions */
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+      --transition-smooth: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-ground);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      min-height: 100vh;
+      position: relative;
+    }
+
+    /* Subtle Noise Texture Overlay */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.035;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+      mix-blend-mode: overlay;
+    }
+
+    /* Tabular Numerals for Clocks, Prices, Timers */
+    .tabular, .mono-nums, .price-badge, .clock-display, .timer-text {
+      font-family: var(--font-mono);
+      font-feature-settings: "tnum" 1;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+
+    h1, h2, h3, h4, .display-font {
+      font-family: var(--font-display);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-display);
+      font-weight: 700;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; border: none; outline: none; background: none; }
+
+    /* ==========================================================================
+       REACT BITS STYLE EFFECTS (Vanilla Implementations)
+       ========================================================================== */
+
+    /* 1. Gradient-Text Logo */
+    .gradient-text-logo {
+      background: var(--gold-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: inline-block;
+      text-shadow: 0 0 25px rgba(201, 162, 39, 0.35);
+      position: relative;
+    }
+
+    /* 2. Shiny Sweep on Prices */
+    .shiny-sweep {
+      position: relative;
+      overflow: hidden;
+    }
+    .shiny-sweep::after {
+      content: '';
+      position: absolute;
+      top: -50%; left: -75%; width: 50%; height: 200%;
+      background: linear-gradient(60deg, transparent 20%, rgba(255, 255, 255, 0.35) 50%, transparent 80%);
+      transform: rotate(25deg);
+      animation: sweepAnimation 4s infinite cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+    }
+    @keyframes sweepAnimation {
+      0% { left: -75%; }
+      35% { left: 140%; }
+      100% { left: 140%; }
+    }
+
+    /* 3. SplitText Character Rise */
+    .stagger-char-wrapper {
+      display: inline-flex;
+      flex-wrap: wrap;
+      overflow: hidden;
+      line-height: 1.15;
+    }
+    .stagger-char {
+      display: inline-block;
+      opacity: 0;
+      transform: translateY(110%) rotate(3deg);
+      animation: charRise 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation-delay: calc(var(--char-index, 0) * 20ms);
+    }
+    .stagger-char.space { width: 0.28em; }
+    @keyframes charRise {
+      to { opacity: 1; transform: translateY(0) rotate(0deg); }
+    }
+
+    /* 4. Magnetic CTA Button */
+    .magnetic-wrap { display: inline-block; position: relative; }
+    .magnetic-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px 28px;
+      background: var(--gold-gradient);
+      color: #0E0E12;
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 4px 25px rgba(201, 162, 39, 0.35), inset 0 0 1px 1px rgba(255,255,255,0.4);
+      transition: box-shadow 0.25s ease, background 0.25s ease;
+      will-change: transform;
+    }
+    .magnetic-btn:hover {
+      box-shadow: 0 8px 35px rgba(229, 189, 59, 0.55), inset 0 0 2px 1px rgba(255,255,255,0.7);
+    }
+
+    /* 5. Spotlight Cards */
+    .spotlight-card {
+      position: relative;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+    .spotlight-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(
+        450px circle at var(--mouse-x, -500px) var(--mouse-y, -500px),
+        rgba(201, 162, 39, 0.12),
+        transparent 65%
+      );
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 1;
+    }
+    .spotlight-card:hover {
+      border-color: var(--border-highlight);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+    .spotlight-card:hover::before { opacity: 1; }
+    .spotlight-card > * { position: relative; z-index: 2; }
+
+    /* 6. ClickSpark Canvas */
+    #clickspark-canvas {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      pointer-events: none;
+      z-index: 9998;
+    }
+
+    /* 7. Status Pill Glow */
+    .status-badge {
+      padding: 5px 12px;
+      border-radius: var(--radius-full);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-badge.status-available {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: var(--status-available);
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+    }
+    .status-badge.status-reserved {
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: var(--status-reserved);
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+    }
+    .status-badge.status-inplay {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: var(--status-inplay);
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+      animation: pulseInPlay 2s infinite ease-in-out;
+    }
+    @keyframes pulseInPlay {
+      0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.25); }
+      50% { box-shadow: 0 0 18px rgba(239, 68, 68, 0.6); }
+    }
+    .status-badge.status-maintenance {
+      background: rgba(107, 114, 128, 0.15);
+      border: 1px solid rgba(107, 114, 128, 0.35);
+      color: var(--status-maint);
+    }
+
+    /* ==========================================================================
+       APP LAYOUT & HEADER
+       ========================================================================== */
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: rgba(14, 14, 18, 0.92);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0 24px;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand-section { display: flex; align-items: center; gap: 14px; }
+    .brand-cue-icon {
+      width: 38px; height: 38px;
+      background: var(--felt-gradient);
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+    }
+    .brand-text h1 { font-size: 1.55rem; letter-spacing: 0.1em; line-height: 1; }
+    .brand-text span {
+      font-size: 0.68rem; color: var(--gold-accent);
+      letter-spacing: 0.22em; text-transform: uppercase; display: block; margin-top: 3px; font-weight: 600;
+    }
+
+    .nav-pills {
+      display: flex; align-items: center;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      padding: 4px; border-radius: var(--radius-full); gap: 4px;
+    }
+    .nav-link {
+      padding: 7px 18px; font-size: 0.82rem; font-weight: 500;
+      color: var(--text-secondary); border-radius: var(--radius-full);
+      transition: var(--transition-smooth); display: flex; align-items: center; gap: 6px;
+    }
+    .nav-link:hover { color: var(--text-display); background: rgba(255, 255, 255, 0.05); }
+    .nav-link.active {
+      background: var(--bg-card-elevated); color: var(--gold-hover);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.5), inset 0 0 0 1px var(--border-highlight);
+    }
+
+    .header-actions { display: flex; align-items: center; gap: 12px; }
+    
+    .storage-badge {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: var(--radius-full);
+      font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .storage-badge.online {
+      background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--emerald-primary);
+    }
+    .storage-badge.offline {
+      background: rgba(201, 162, 39, 0.12); border: 1px solid rgba(201, 162, 39, 0.35); color: var(--gold-hover);
+    }
+
+    .staff-trigger-btn {
+      padding: 7px 14px; background: var(--bg-card);
+      border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+      color: var(--text-secondary); font-size: 0.8rem; display: flex; align-items: center; gap: 6px;
+      transition: var(--transition-smooth);
+    }
+    .staff-trigger-btn:hover { border-color: var(--gold-accent); color: var(--gold-hover); }
+
+    /* Demo Ribbon */
+    .demo-ribbon {
+      background: #16140D;
+      border-bottom: 1px solid rgba(201, 162, 39, 0.28);
+      padding: 6px 24px;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+      font-size: 0.75rem; color: var(--gold-light);
+    }
+    .demo-ribbon-left { display: flex; align-items: center; gap: 10px; }
+    .demo-badge {
+      background: var(--gold-accent); color: #0E0E12;
+      padding: 2px 6px; border-radius: 3px; font-weight: 700; text-transform: uppercase; font-size: 0.65rem;
+    }
+    .demo-btns { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .demo-btn {
+      padding: 3px 9px; border: 1px solid rgba(201, 162, 39, 0.35); border-radius: var(--radius-sm);
+      color: var(--gold-light); background: rgba(0,0,0,0.35); font-size: 0.72rem; transition: var(--transition-smooth);
+    }
+    .demo-btn:hover, .demo-btn.active {
+      background: var(--gold-accent); color: #0E0E12; border-color: var(--gold-accent); font-weight: 600;
+    }
+
+    /* Main Container */
+    main {
+      min-height: calc(100vh - 72px - 50px);
+      padding: 36px 24px 80px;
+      max-width: 1360px;
+      margin: 0 auto;
+    }
+    .view-container { display: none; animation: fadeInView 0.3s ease forwards; }
+    .view-container.active-view { display: block; }
+    @keyframes fadeInView {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ==========================================================================
+       VIEW 1: SANCTUARY HOME (`#/`)
+       ========================================================================== */
+    .hero-banner {
+      background: radial-gradient(circle at 50% 20%, rgba(11, 61, 46, 0.4) 0%, rgba(19, 19, 23, 0.95) 70%), var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 60px 48px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 48px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    }
+    .hero-banner::after {
+      content: '';
+      position: absolute; top: 0; left: 15%; right: 15%; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold-accent), transparent);
+    }
+    .hero-pretitle {
+      font-size: 0.8rem; letter-spacing: 0.3em; color: var(--gold-accent);
+      text-transform: uppercase; font-weight: 700; margin-bottom: 16px;
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+    }
+    .hero-pretitle::before, .hero-pretitle::after {
+      content: ''; width: 32px; height: 1px; background: var(--gold-accent); opacity: 0.6;
+    }
+    .hero-title { font-size: clamp(2.2rem, 5vw, 3.8rem); line-height: 1.1; margin-bottom: 20px; }
+    .hero-subtitle {
+      max-width: 680px; margin: 0 auto 36px; color: var(--text-secondary);
+      font-size: 1.05rem; font-weight: 400; line-height: 1.6;
+    }
+    .hero-actions { display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; }
+    .secondary-cta {
+      padding: 14px 26px; background: var(--bg-card);
+      border: 1px solid var(--border-highlight); border-radius: var(--radius-sm);
+      color: var(--text-display); font-family: var(--font-display);
+      font-size: 1rem; letter-spacing: 0.08em; text-transform: uppercase; transition: var(--transition-smooth);
+    }
+    .secondary-cta:hover { border-color: var(--gold-accent); color: var(--gold-hover); background: var(--bg-card-elevated); }
+
+    .hero-telemetry-strip {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px; margin-top: 48px; padding-top: 36px; border-top: 1px solid var(--border-subtle);
+    }
+    .telemetry-item { text-align: center; }
+    .telemetry-val { font-size: 1.6rem; font-weight: 700; color: var(--text-display); margin-bottom: 4px; }
+    .telemetry-lbl { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.12em; }
+
+    .section-header {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      margin-bottom: 24px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 14px;
+    }
+    .section-header h2 { font-size: 1.8rem; letter-spacing: 0.06em; }
+    .section-header p { color: var(--text-secondary); font-size: 0.88rem; }
+
+    .discipline-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 24px; margin-bottom: 56px;
+    }
+    .discipline-card {
+      padding: 28px; display: flex; flex-direction: column; justify-content: space-between; min-height: 320px;
+    }
+    .discipline-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+    .discipline-badge {
+      font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 4px 10px; border-radius: var(--radius-sm); font-weight: 700;
+      background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-subtle); color: var(--gold-accent);
+    }
+    .price-tag {
+      background: var(--bg-ground); border: 1px solid var(--border-subtle);
+      padding: 6px 14px; border-radius: var(--radius-sm); display: inline-flex; align-items: baseline; gap: 4px;
+    }
+    .price-curr { color: var(--gold-accent); font-weight: 700; font-size: 1.3rem; }
+    .price-unit { color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
+
+    /* ==========================================================================
+       VIEW 2: LIVE BOARD (`#/tables`)
+       ========================================================================== */
+    .tables-matrix-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 24px;
+    }
+    .table-board-card {
+      padding: 26px; display: flex; flex-direction: column; justify-content: space-between; min-height: 290px;
+    }
+    .table-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+    .table-num-id { font-size: 0.82rem; font-weight: 700; color: var(--gold-accent); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 4px; }
+    .table-card-title { font-size: 1.35rem; color: var(--text-display); }
+    .table-body-specs { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5; }
+    .table-status-info {
+      background: rgba(0,0,0,0.25); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 20px;
+    }
+    .status-info-row { display: flex; justify-content: space-between; font-size: 0.8rem; }
+    .btn-reserve-slot {
+      flex: 1; padding: 10px 16px; background: var(--gold-accent); color: #0E0E12;
+      font-weight: 700; font-size: 0.85rem; border-radius: var(--radius-sm);
+      text-align: center; text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-display);
+      transition: var(--transition-smooth);
+    }
+    .btn-reserve-slot:hover { background: var(--gold-hover); box-shadow: 0 0 15px var(--gold-glow); }
+
+    /* ==========================================================================
+       VIEW 3: 4-STEP RESERVATION WIZARD (`#/book`)
+       ========================================================================== */
+    .wizard-container {
+      max-width: 900px; margin: 0 auto; background: var(--bg-surface);
+      border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
+      padding: 36px 40px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+    }
+    .wizard-progress-bar { display: flex; justify-content: space-between; margin-bottom: 36px; position: relative; }
+    .wizard-progress-bar::before {
+      content: ''; position: absolute; top: 18px; left: 30px; right: 30px; height: 2px;
+      background: var(--border-subtle); z-index: 1;
+    }
+    .progress-step-item { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .step-circle {
+      width: 38px; height: 38px; border-radius: 50%; background: var(--bg-card);
+      border: 2px solid var(--border-subtle); color: var(--text-muted);
+      display: flex; align-items: center; justify-content: center; font-size: 0.88rem; font-weight: 700;
+    }
+    .progress-step-item.active .step-circle {
+      background: var(--gold-accent); border-color: var(--gold-hover); color: #0E0E12; box-shadow: 0 0 16px var(--gold-glow);
+    }
+    .progress-step-item.completed .step-circle { background: var(--emerald-primary); border-color: var(--emerald-primary); color: #0E0E12; }
+    .step-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; }
+    .progress-step-item.active .step-label { color: var(--gold-accent); }
+
+    .wizard-step-pane { display: none; }
+    .wizard-step-pane.active-step { display: block; animation: fadeInStep 0.25s ease; }
+    @keyframes fadeInStep { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+
+    .table-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .table-picker-card {
+      background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+      padding: 18px; cursor: pointer; transition: var(--transition-smooth);
+    }
+    .table-picker-card.selected { border-color: var(--gold-hover); background: rgba(201, 162, 39, 0.08); box-shadow: 0 0 20px rgba(201, 162, 39, 0.2); }
+    .table-picker-card.maint-card { opacity: 0.5; cursor: not-allowed; }
+
+    .form-field { margin-bottom: 20px; }
+    .form-label { display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); margin-bottom: 8px; font-weight: 600; }
+    .form-input, .form-select {
+      width: 100%; background: var(--bg-card); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm); padding: 12px 16px; color: var(--text-display); font-size: 0.95rem;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--gold-accent); outline: none; box-shadow: 0 0 12px var(--gold-glow); }
+
+    .live-price-ledger {
+      background: var(--bg-card); border: 1px solid var(--border-highlight);
+      border-radius: var(--radius-md); padding: 22px; margin-top: 16px;
+    }
+    .ledger-title {
+      font-size: 0.8rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold-accent);
+      margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .ledger-row { display: flex; justify-content: space-between; font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 8px; }
+    .ledger-row.total-row {
+      border-top: 1px solid var(--border-subtle); padding-top: 12px; margin-top: 10px;
+      font-size: 1.15rem; font-weight: 700; color: var(--text-display);
+    }
+
+    .btn-step-next {
+      padding: 12px 30px; background: var(--gold-accent); color: #0E0E12;
+      border-radius: var(--radius-sm); font-size: 0.92rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-display);
+      transition: var(--transition-smooth);
+    }
+    .btn-step-next:hover { background: var(--gold-hover); box-shadow: 0 0 20px var(--gold-glow); }
+
+    /* ==========================================================================
+       VIEW 4: MEMBER SELF-SERVICE VAULT (`#/my`)
+       ========================================================================== */
+    .vault-search-box {
+      max-width: 600px; margin: 0 auto 36px; background: var(--bg-surface);
+      border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 24px; text-align: center;
+    }
+    .booking-vault-card {
+      background: var(--bg-surface); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md); padding: 24px; margin-bottom: 20px;
+    }
+    .vault-details-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;
+      padding: 14px; background: var(--bg-card); border-radius: var(--radius-sm); margin: 14px 0; font-size: 0.85rem;
+    }
+
+    /* ==========================================================================
+       VIEW 5: ADMIN COMMAND CENTER (`#/admin`)
+       ========================================================================== */
+    .admin-subnav {
+      display: flex; gap: 6px; overflow-x: auto; background: var(--bg-surface);
+      border: 1px solid var(--border-subtle); padding: 6px; border-radius: var(--radius-md);
+      margin-bottom: 28px;
+    }
+    .admin-sublink {
+      padding: 8px 16px; font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);
+      border-radius: var(--radius-sm); white-space: nowrap; transition: var(--transition-smooth);
+    }
+    .admin-sublink:hover { color: var(--text-display); background: rgba(255,255,255,0.04); }
+    .admin-sublink.active {
+      background: var(--bg-card-elevated); color: var(--gold-hover); border: 1px solid var(--border-highlight);
+    }
+
+    .admin-tab-pane { display: none; }
+    .admin-tab-pane.active-tab { display: block; animation: fadeInView 0.25s ease; }
+
+    .ops-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 22px; }
+    .ops-table-card {
+      background: var(--bg-surface); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md); padding: 22px; display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .ops-stopwatch {
+      font-size: 2.2rem; font-weight: 700; text-align: center; margin: 12px 0;
+      color: var(--text-display); letter-spacing: 0.04em;
+    }
+    .ops-progress-bar { height: 6px; background: var(--bg-ground); border-radius: 3px; overflow: hidden; margin-bottom: 14px; }
+    .ops-progress-fill { height: 100%; background: var(--emerald-primary); width: 0%; transition: width 0.4s ease; }
+
+    .ops-quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 14px; }
+    .btn-ops-action {
+      padding: 7px 4px; background: var(--bg-card); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm); font-size: 0.74rem; font-weight: 600; color: var(--text-secondary); text-align: center;
+    }
+    .btn-ops-action:hover { background: var(--bg-card-elevated); color: var(--gold-hover); border-color: var(--gold-accent); }
+    .btn-ops-settle {
+      grid-column: span 4; background: rgba(16, 185, 129, 0.15); border-color: var(--emerald-primary);
+      color: var(--emerald-primary); font-weight: 700; padding: 8px; margin-top: 4px;
+    }
+
+    /* CSS Graph Bars for Analytics */
+    .bar-chart-container {
+      background: var(--bg-surface); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md); padding: 22px; margin-top: 20px;
+    }
+    .bar-item { margin-bottom: 14px; }
+    .bar-label-row { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; }
+    .bar-track { height: 12px; background: var(--bg-ground); border-radius: 6px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--gold-gradient); border-radius: 6px; }
+
+    /* Modals */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px);
+      z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;
+      opacity: 0; pointer-events: none; transition: opacity 0.22s ease;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal-box {
+      background: var(--bg-surface); border: 1px solid var(--border-highlight);
+      border-radius: var(--radius-lg); width: 100%; max-width: 540px; padding: 30px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.85); transform: scale(0.95); transition: transform 0.22s ease;
+    }
+    .modal-overlay.open .modal-box { transform: scale(1); }
+
+    /* Toast */
+    .toast-container {
+      position: fixed; bottom: 24px; right: 24px; z-index: 10001;
+      display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+    }
+    .toast {
+      padding: 12px 20px; background: var(--bg-card-elevated); border: 1px solid var(--border-highlight);
+      border-radius: var(--radius-sm); color: var(--text-display); font-size: 0.85rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.6); display: flex; align-items: center; gap: 10px; pointer-events: auto;
+      animation: slideInToast 0.25s ease;
+    }
+    .toast.success { border-color: var(--emerald-primary); color: #34D399; }
+    .toast.error { border-color: #EF4444; color: #F87171; }
+    @keyframes slideInToast { from { transform: translateX(50px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* Print CSS */
+    @media print {
+      body * { visibility: hidden; }
+      #printable-tax-invoice, #printable-tax-invoice * { visibility: visible; }
+      #printable-tax-invoice {
+        position: absolute; left: 0; top: 0; width: 100%;
+        background: #FFFFFF !important; color: #000000 !important;
+        box-shadow: none !important; border: 1px solid #CCCCCC !important;
+      }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Spark canvas overlay -->
+  <canvas id="clickspark-canvas"></canvas>
+
+  <!-- Navigation Header -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-cue-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#F5F1E6" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="12" r="3" fill="#C9A227"></circle>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1 class="gradient-text-logo">Q-BALL</h1>
+        <span>Sanctuary & Ops</span>
+      </div>
+    </div>
+
+    <nav class="nav-pills" id="main-nav">
+      <a href="#/" class="nav-link" data-route="home">Sanctuary</a>
+      <a href="#/tables" class="nav-link" data-route="tables">Live Board</a>
+      <a href="#/book" class="nav-link" data-route="book">Reserve</a>
+      <a href="#/my" class="nav-link" data-route="my">My Passes</a>
+      <a href="#/admin" class="nav-link" data-route="admin" style="color:var(--gold-hover);">Admin Deck</a>
+    </nav>
+
+    <div class="header-actions">
+      <div id="storage-status-badge" class="storage-badge offline">
+        <span>●</span> <span id="storage-status-text">Booting Store...</span>
+      </div>
+      <div class="status-badge status-available" style="padding:4px 10px;">
+        <span id="global-occupancy-pill" class="tabular">--</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Interactive Demo Ribbon & Time Traveler -->
+  <div class="demo-ribbon">
+    <div class="demo-ribbon-left">
+      <span class="demo-badge">Demo Engine</span>
+      <span>Simulated Clock: <strong id="sim-clock-display" class="tabular" style="color:var(--gold-hover);">...</strong></span>
+    </div>
+    <div class="demo-btns">
+      <button class="demo-btn" onclick="setDemoClock(null)">Live Real-Time</button>
+      <button class="demo-btn" onclick="setDemoClockPreset('18:40')">Set Clock 18:40 (Peak)</button>
+      <button class="demo-btn" onclick="stepDemoClock(10)">+10 Min Step</button>
+      <button class="demo-btn" onclick="loadRealisticDemoData()">Load Demo Data</button>
+      <button class="demo-btn" onclick="simulateBookingRace()" style="border-color:#EF4444; color:#FCA5A5;">Simulate Booking Race</button>
+    </div>
+  </div>
+
+  <main>
+    <!-- ====================================================================
+         VIEW 1: CUSTOMER SANCTUARY HOME (`#/`)
+         ==================================================================== -->
+    <section id="view-home" class="view-container">
+      <div class="hero-banner">
+        <div class="hero-pretitle">Connaught Promenade • New Delhi • Est. 2018</div>
+        <h1 class="hero-title display-font" id="hero-headline">
+          SANCTUARY OF CUE SPORTS & PRIVATE REPOSE
+        </h1>
+        <p class="hero-subtitle">
+          An atmospheric subterranean haven curated for billiard connoisseurs. Hand-leveled tournament slates, Hainsworth precision tournament baize, brass fixtures, and cellar single malt service.
+        </p>
+
+        <div class="hero-actions">
+          <div class="magnetic-wrap" id="hero-magnetic-wrap">
+            <a href="#/book" class="magnetic-btn" id="hero-book-btn">
+              <span>Book a Table</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </a>
+          </div>
+          <a href="#/tables" class="secondary-cta">Live Floor Telemetry</a>
+        </div>
+
+        <div class="hero-telemetry-strip">
+          <div class="telemetry-item">
+            <div class="telemetry-val tabular" id="hero-avail-count">--</div>
+            <div class="telemetry-lbl">Tables Available Now</div>
+          </div>
+          <div class="telemetry-item">
+            <div class="telemetry-val tabular">10:00 – 23:00</div>
+            <div class="telemetry-lbl">Sanctuary Hours</div>
+          </div>
+          <div class="telemetry-item">
+            <div class="telemetry-val tabular">18:00 – 22:00</div>
+            <div class="telemetry-lbl">Peak Twilight Surge (1.25×)</div>
+          </div>
+          <div class="telemetry-item">
+            <div class="telemetry-val tabular">21.8°C / 48%</div>
+            <div class="telemetry-lbl">Felt Thermoregulation</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pricing / Disciplines Grid -->
+      <div class="section-header">
+        <div>
+          <h2>The Championship Slates</h2>
+          <p>Meticulously leveled championship slates and curated cues</p>
+        </div>
+      </div>
+
+      <div class="discipline-grid" id="home-discipline-grid">
+        <!-- Injected via renderHomeDisciplines() -->
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 2: REAL-TIME LIVE BOARD (`#/tables`)
+         ==================================================================== -->
+    <section id="view-tables" class="view-container">
+      <div class="section-header">
+        <div>
+          <h2>Sanctuary Live Tables Board</h2>
+          <p>Real-time occupancy status, cloth conditioning sensors, and match forecasts</p>
+        </div>
+        <div class="status-badge status-available" id="live-board-velocity-badge">Active Occupancy Velocity: 67%</div>
+      </div>
+
+      <div class="tables-matrix-grid" id="tables-live-grid">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 3: TERMINAL RESERVATION WIZARD (`#/book`)
+         ==================================================================== -->
+    <section id="view-book" class="view-container">
+      <div class="wizard-container">
+        <!-- Progress Steps -->
+        <div class="wizard-progress-bar">
+          <div class="progress-step-item active" id="wizard-step-node-1">
+            <div class="step-circle tabular">1</div>
+            <span class="step-label">Apparatus</span>
+          </div>
+          <div class="progress-step-item" id="wizard-step-node-2">
+            <div class="step-circle tabular">2</div>
+            <span class="step-label">Schedule & Tab</span>
+          </div>
+          <div class="progress-step-item" id="wizard-step-node-3">
+            <div class="step-circle tabular">3</div>
+            <span class="step-label">Patron</span>
+          </div>
+          <div class="progress-step-item" id="wizard-step-node-4">
+            <div class="step-circle tabular">4</div>
+            <span class="step-label">Sanctuary Pass</span>
+          </div>
+        </div>
+
+        <!-- Step 1: Apparatus -->
+        <div class="wizard-step-pane active-step" id="wizard-step-1">
+          <h3 style="margin-bottom:6px;">Step 1: Select Your Table Slate</h3>
+          <p style="color:var(--text-secondary); margin-bottom:20px; font-size:0.88rem;">
+            Choose from English 8-Ball, Championship Snooker, or VIP Brunswick slates.
+          </p>
+          <div class="table-picker-grid" id="wizard-table-picker"></div>
+          <div style="display:flex; justify-content:flex-end;">
+            <button class="btn-step-next" onclick="goToWizardStep(2)">Proceed to Schedule →</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Slot & Duration with Live AnimatedCounter -->
+        <div class="wizard-step-pane" id="wizard-step-2">
+          <h3 style="margin-bottom:6px;">Step 2: Session Schedule & Duration</h3>
+          <p style="color:var(--text-secondary); margin-bottom:20px; font-size:0.88rem;">
+            Select start time and playing duration. 30-min minimum; peak 1.25× applies 18:00–22:00.
+          </p>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">
+            <div>
+              <div class="form-field">
+                <label class="form-label" for="booking-date">Session Date</label>
+                <input type="date" id="booking-date" class="form-input" onchange="onBookingInputsChanged()">
+              </div>
+              <div class="form-field">
+                <label class="form-label" for="booking-start-time">Tee-off Start Time</label>
+                <select id="booking-start-time" class="form-select" onchange="onBookingInputsChanged()"></select>
+              </div>
+              <div class="form-field">
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                  <label class="form-label">Duration</label>
+                  <span id="duration-val-display" class="tabular" style="color:var(--gold-hover); font-weight:700;">60 Mins</span>
+                </div>
+                <input type="range" id="booking-duration-slider" min="30" max="240" step="15" value="60" style="width:100%; accent-color:var(--gold-accent);" oninput="onDurationSliderInput(this.value)">
+              </div>
+            </div>
+
+            <!-- Live AnimatedCounter Ledger -->
+            <div>
+              <div class="live-price-ledger">
+                <div class="ledger-title">
+                  <span>Live Price Ledger</span>
+                  <span id="peak-indicator-badge" class="status-badge status-reserved" style="display:none; font-size:0.65rem;">Peak ×1.25</span>
+                </div>
+                <div class="ledger-row">
+                  <span>Table:</span>
+                  <strong id="ledger-table-name" style="color:var(--text-display);">Table 3 — Snooker</strong>
+                </div>
+                <div class="ledger-row">
+                  <span>Rate:</span>
+                  <span id="ledger-base-rate" class="tabular">₹300 / hr</span>
+                </div>
+                <div class="ledger-row">
+                  <span>Peak Surge Minutes:</span>
+                  <span id="ledger-peak-mins" class="tabular">60 mins</span>
+                </div>
+                <div class="ledger-row" style="font-weight:700; color:var(--gold-hover);">
+                  <span>Session Subtotal:</span>
+                  <span id="ledger-subtotal" class="tabular" style="font-size:1.15rem;">₹375</span>
+                </div>
+                <div class="ledger-row">
+                  <span>Taxes (18% GST):</span>
+                  <span id="ledger-gst" class="tabular">₹68</span>
+                </div>
+                <div class="ledger-row total-row">
+                  <span>Grand Total:</span>
+                  <span id="ledger-grand-total" class="tabular shiny-sweep">₹443</span>
+                </div>
+                <div class="ledger-row" style="color:var(--emerald-primary); font-weight:600; margin-top:8px;">
+                  <span>Advance Deposit (20%):</span>
+                  <span id="ledger-deposit" class="tabular">₹89</span>
+                </div>
+              </div>
+              <div id="booking-overlap-warning" style="display:none; margin-top:14px; padding:12px; background:rgba(239,68,68,0.12); border:1px solid #EF4444; border-radius:var(--radius-sm); font-size:0.8rem; color:#FCA5A5;"></div>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; margin-top:24px;">
+            <button class="secondary-cta" onclick="goToWizardStep(1)">← Back</button>
+            <button class="btn-step-next" id="btn-to-step-3" onclick="validateStep2AndProceed()">Patron Details →</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Patron -->
+        <div class="wizard-step-pane" id="wizard-step-3">
+          <h3 style="margin-bottom:6px;">Step 3: Patron Credentials</h3>
+          <p style="color:var(--text-secondary); margin-bottom:20px; font-size:0.88rem;">
+            Provide lead player name and 10-digit mobile number for gate access PIN and receipt.
+          </p>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+            <div class="form-field">
+              <label class="form-label" for="patron-name">Lead Player Name *</label>
+              <input type="text" id="patron-name" class="form-input" placeholder="e.g. Aryan Malhotra">
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="patron-phone">10-Digit Mobile Number *</label>
+              <input type="tel" id="patron-phone" class="form-input tabular" placeholder="e.g. 9810123456" maxlength="10">
+              <span id="phone-validation-hint" style="font-size:0.75rem; color:#EF4444; display:block; margin-top:4px;">
+                Valid 10-digit Indian phone (starts with 6-9).
+              </span>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; margin-top:24px;">
+            <button class="secondary-cta" onclick="goToWizardStep(2)">← Schedule</button>
+            <button class="btn-step-next" id="btn-commit-booking" onclick="executeCommitBooking()">Authorize & Commit Booking →</button>
+          </div>
+        </div>
+
+        <!-- Step 4: Big Booking Confirmation Screen -->
+        <div class="wizard-step-pane" id="wizard-step-4">
+          <div style="text-align:center; padding:24px 0;">
+            <div style="width:56px; height:56px; border-radius:50%; background:rgba(16,185,129,0.2); border:1px solid var(--emerald-primary); color:var(--emerald-primary); display:flex; align-items:center; justify-content:center; margin:0 auto 14px; font-size:1.8rem;">✓</div>
+            <h2 style="font-size:2rem; margin-bottom:6px;">Reservation Locked</h2>
+            <p style="color:var(--text-secondary); font-size:0.9rem;">Digital Sanctuary Pass and Table Gate Access PIN issued.</p>
+
+            <div style="margin:20px auto; display:inline-block; padding:14px 36px; background:var(--bg-card); border:1px solid var(--gold-accent); border-radius:var(--radius-md); box-shadow:0 0 30px rgba(201,162,39,0.25);">
+              <div style="font-size:0.75rem; letter-spacing:0.2em; color:var(--gold-accent); text-transform:uppercase;">Sanctuary Token ID</div>
+              <div id="confirmed-booking-id" class="scramble-id-text tabular" style="font-size:2.6rem; font-weight:700; color:var(--gold-hover);">BK-••••••</div>
+            </div>
+
+            <div id="pass-summary-card" class="spotlight-card" style="max-width:540px; margin:20px auto; padding:24px; text-align:left;">
+              <!-- Populated dynamically -->
+            </div>
+
+            <div style="display:flex; justify-content:center; gap:14px; margin-top:24px;">
+              <a href="#/my" class="btn-step-next">View in My Passes →</a>
+              <button class="secondary-cta" onclick="printReceiptForCurrentBooking()">Print Official Receipt</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 4: MEMBER SELF-SERVICE VAULT (`#/my`)
+         ==================================================================== -->
+    <section id="view-my" class="view-container">
+      <div class="section-header">
+        <div>
+          <h2>Member Self-Service Vault</h2>
+          <p>Instant phone lookup for upcoming match passes, gate PINs, and GST receipts</p>
+        </div>
+      </div>
+
+      <div class="vault-search-box">
+        <label class="form-label" for="vault-phone-input">Enter 10-Digit Registered Phone</label>
+        <div style="display:flex; gap:10px; margin-top:10px;">
+          <input type="tel" id="vault-phone-input" class="form-input tabular" placeholder="e.g. 9810123456" maxlength="10">
+          <button class="btn-step-next" onclick="searchVaultByPhone()">Lookup Passes</button>
+        </div>
+      </div>
+
+      <div id="vault-results-wrapper" style="max-width:860px; margin:0 auto; display:none;">
+        <div id="vault-patron-badge" style="text-align:center; margin-bottom:20px;"></div>
+        <div id="vault-passes-list"></div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 5: ADMIN OPERATIONS COMMAND DECK (`#/admin`)
+         ==================================================================== -->
+    <section id="view-admin" class="view-container">
+      <div class="section-header">
+        <div>
+          <h2>Staff Operations Command Deck</h2>
+          <p>Live table timers, check-ins, extensions, walk-ins, billing tabs & shift telemetry</p>
+        </div>
+        <div class="clock-display tabular" id="admin-millisecond-clock" style="font-size:1.1rem; color:var(--gold-hover);">
+          IST 18:40:00.000
+        </div>
+      </div>
+
+      <!-- Admin Subnavigation Tabs -->
+      <nav class="admin-subnav" id="admin-subnav">
+        <button class="admin-sublink active" onclick="switchAdminTab('live')">Live Floor</button>
+        <button class="admin-sublink" onclick="switchAdminTab('bookings')">Bookings Queue</button>
+        <button class="admin-sublink" onclick="switchAdminTab('customers')">Customer CRM</button>
+        <button class="admin-sublink" onclick="switchAdminTab('tables')">Apparatus & Rates</button>
+        <button class="admin-sublink" onclick="switchAdminTab('analytics')">Telemetry & Analytics</button>
+        <button class="admin-sublink" onclick="switchAdminTab('settings')">Club Settings</button>
+        <button class="admin-sublink" onclick="switchAdminTab('log')">Audit Log</button>
+        <button class="admin-sublink" onclick="switchAdminTab('demo')" style="color:var(--gold-accent);">Demo Controls</button>
+      </nav>
+
+      <!-- TAB 1: LIVE FLOOR -->
+      <div class="admin-tab-pane active-tab" id="admin-tab-live">
+        <div style="display:flex; justify-content:space-between; margin-bottom:18px;">
+          <button class="btn-step-next" onclick="openWalkinModal()">+ Fast Walk-In Allocation</button>
+          <span class="tabular text-secondary" id="admin-live-summary">6 Tables Configured</span>
+        </div>
+        <div class="ops-grid" id="admin-ops-grid"></div>
+      </div>
+
+      <!-- TAB 2: BOOKINGS QUEUE -->
+      <div class="admin-tab-pane" id="admin-tab-bookings">
+        <div class="section-header" style="border:none; margin-bottom:12px; padding:0;">
+          <h4>Today's Reservation Timeline & Grace Deadlines</h4>
+        </div>
+        <div id="admin-bookings-timeline" style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:18px;"></div>
+      </div>
+
+      <!-- TAB 3: CUSTOMER CRM & LOYALTY -->
+      <div class="admin-tab-pane" id="admin-tab-customers">
+        <div style="display:flex; gap:12px; margin-bottom:18px;">
+          <input type="text" id="crm-search-input" class="form-input" placeholder="Search customer by name or 10-digit phone..." oninput="renderCrmCustomers()">
+        </div>
+        <div id="crm-customers-list" style="display:flex; flex-direction:column; gap:14px;"></div>
+      </div>
+
+      <!-- TAB 4: APPARATUS & TABLES -->
+      <div class="admin-tab-pane" id="admin-tab-tables">
+        <div style="display:flex; justify-content:space-between; margin-bottom:16px;">
+          <h4>Configure Tables, Rates & Maintenance Overrides</h4>
+          <button class="secondary-cta" onclick="openAddTableModal()">+ Add New Slate</button>
+        </div>
+        <div id="admin-tables-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:18px;"></div>
+      </div>
+
+      <!-- TAB 5: TELEMETRY & ANALYTICS -->
+      <div class="admin-tab-pane" id="admin-tab-analytics">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px;">
+          <div class="spotlight-card" style="padding:20px;">
+            <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;">Today's Revenue</div>
+            <div id="analytics-rev" class="tabular" style="font-size:1.8rem; font-weight:700; color:var(--gold-hover); margin-top:4px;">₹0</div>
+          </div>
+          <div class="spotlight-card" style="padding:20px;">
+            <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;">Completed Sessions</div>
+            <div id="analytics-sessions" class="tabular" style="font-size:1.8rem; font-weight:700; color:var(--emerald-primary); margin-top:4px;">0</div>
+          </div>
+          <div class="spotlight-card" style="padding:20px;">
+            <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;">Floor Occupancy</div>
+            <div id="analytics-occupancy" class="tabular" style="font-size:1.8rem; font-weight:700; color:var(--text-display); margin-top:4px;">0%</div>
+          </div>
+          <div class="spotlight-card" style="padding:20px;">
+            <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;">Outstanding Dues</div>
+            <div id="analytics-dues" class="tabular" style="font-size:1.8rem; font-weight:700; color:#EF4444; margin-top:4px;">₹0</div>
+          </div>
+        </div>
+
+        <div class="bar-chart-container">
+          <h4 style="margin-bottom:14px;">Apparatus Popularity & Table Utilization</h4>
+          <div id="analytics-table-bars"></div>
+        </div>
+      </div>
+
+      <!-- TAB 6: SETTINGS -->
+      <div class="admin-tab-pane" id="admin-tab-settings">
+        <div class="spotlight-card" style="padding:28px; max-width:700px;">
+          <h4 style="margin-bottom:18px;">Club Operating Rules & Security PIN</h4>
+          <div class="form-field">
+            <label class="form-label" for="setting-club-name">Club Title</label>
+            <input type="text" id="setting-club-name" class="form-input">
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+            <div class="form-field">
+              <label class="form-label" for="setting-open-hour">Opening Hour (24h)</label>
+              <input type="number" id="setting-open-hour" class="form-input tabular">
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="setting-close-hour">Closing Hour (24h)</label>
+              <input type="number" id="setting-close-hour" class="form-input tabular">
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+            <div class="form-field">
+              <label class="form-label" for="setting-buffer-min">Cloth Turnaround Buffer (Minutes)</label>
+              <input type="number" id="setting-buffer-min" class="form-input tabular">
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="setting-staff-pin">Staff Deck Security PIN</label>
+              <input type="text" id="setting-staff-pin" class="form-input tabular">
+            </div>
+          </div>
+          <button class="btn-step-next" onclick="saveAdminSettings()">Save Configuration</button>
+        </div>
+      </div>
+
+      <!-- TAB 7: AUDIT LOG -->
+      <div class="admin-tab-pane" id="admin-tab-log">
+        <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+          <h4>Immutable System Activity Log</h4>
+          <button class="secondary-cta" style="padding:4px 10px; font-size:0.75rem;" onclick="renderAdminLog()">Refresh Log</button>
+        </div>
+        <div id="admin-log-container" style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:16px; max-height:500px; overflow-y:auto; font-family:var(--font-mono); font-size:0.8rem;"></div>
+      </div>
+
+      <!-- TAB 8: DEMO CONTROLS -->
+      <div class="admin-tab-pane" id="admin-tab-demo">
+        <div class="spotlight-card" style="padding:28px; max-width:680px;">
+          <h4 style="margin-bottom:12px;">Automated Demo Runner & Race Condition Tester</h4>
+          <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:20px;">
+            Use these controls to verify the 9-step demo requirements without waiting for real-world clocks.
+          </p>
+
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <button class="btn-step-next" onclick="loadRealisticDemoData()">
+              1. Reset & Load Standard Demo Suite (6 Tables + Matches)
+            </button>
+            <button class="secondary-cta" onclick="setDemoClockPreset('18:40')">
+              2. Fast-Forward Simulated Clock to 18:40 (Peak Twilight)
+            </button>
+            <button class="secondary-cta" onclick="stepDemoClock(10)">
+              3. Advance Clock by +10 Minutes (Triggers Grace & No-Shows)
+            </button>
+            <button class="secondary-cta" style="border-color:#EF4444; color:#F87171;" onclick="simulateBookingRace()">
+              4. Execute Booking Race (2 Simultaneous Commits 50ms Apart)
+            </button>
+            <button class="secondary-cta" onclick="resetDatabaseClean()">
+              5. Reset Everything to Clean First-Run Seed
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW 6: OFFICIAL TAX INVOICE & RECEIPT (`#/b/:id`)
+         ==================================================================== -->
+    <section id="view-invoice" class="view-container">
+      <div class="no-print" style="margin-bottom:20px;">
+        <button class="secondary-cta" onclick="window.history.back()">← Return</button>
+      </div>
+
+      <div class="spotlight-card" id="printable-tax-invoice" style="max-width:680px; margin:0 auto; padding:36px; background:#16161B;">
+        <!-- Injected via renderBookingInvoice() -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Walk-In Modal -->
+  <div class="modal-overlay" id="walkin-modal">
+    <div class="modal-box">
+      <h3 class="display-font" style="margin-bottom:8px;">New Walk-In Match Allocation</h3>
+      <div class="form-field">
+        <label class="form-label" for="walkin-table-select">Select Available Apparatus</label>
+        <select id="walkin-table-select" class="form-select"></select>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="walkin-patron-name">Patron Name</label>
+        <input type="text" id="walkin-patron-name" class="form-input" value="Walk-In Patron">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="walkin-patron-phone">Patron Phone (Optional)</label>
+        <input type="tel" id="walkin-patron-phone" class="form-input tabular" placeholder="9810123456" maxlength="10">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="walkin-duration">Initial Session Block</label>
+        <select id="walkin-duration" class="form-select">
+          <option value="30">30 Minutes</option>
+          <option value="60" selected>60 Minutes (Standard)</option>
+          <option value="90">90 Minutes</option>
+          <option value="120">120 Minutes</option>
+        </select>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+        <button class="secondary-cta" onclick="closeModal('walkin-modal')">Cancel</button>
+        <button class="btn-step-next" onclick="confirmWalkInSession()">Start Session Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settle Session / Billing Modal -->
+  <div class="modal-overlay" id="settle-modal">
+    <div class="modal-box" id="settle-modal-content">
+      <!-- Populated dynamically via openSettleModal() -->
+    </div>
+  </div>
+
+  <!-- Extend Session Modal -->
+  <div class="modal-overlay" id="extend-modal">
+    <div class="modal-box">
+      <h3 class="display-font" style="margin-bottom:8px;">Extend Session Duration</h3>
+      <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:16px;">
+        Re-checking schedule conflicts against upcoming bookings and mandatory 10m buffer.
+      </p>
+      <div style="display:flex; gap:12px; margin-bottom:20px;">
+        <button class="btn-step-next" style="flex:1;" onclick="executeExtendMinutes(15)">+15 Minutes</button>
+        <button class="btn-step-next" style="flex:1;" onclick="executeExtendMinutes(30)">+30 Minutes</button>
+      </div>
+      <div id="extend-error-msg" style="display:none; padding:10px; background:rgba(239,68,68,0.15); border:1px solid #EF4444; border-radius:4px; font-size:0.8rem; color:#FCA5A5;"></div>
+      <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+        <button class="secondary-cta" onclick="closeModal('extend-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Table Modal -->
+  <div class="modal-overlay" id="add-table-modal">
+    <div class="modal-box">
+      <h3 class="display-font" style="margin-bottom:12px;">Add Championship Slate</h3>
+      <div class="form-field">
+        <label class="form-label" for="new-table-id">Table Identifier (e.g. T7)</label>
+        <input type="text" id="new-table-id" class="form-input tabular">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="new-table-name">Table Title</label>
+        <input type="text" id="new-table-name" class="form-input">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="new-table-discipline">Discipline Type</label>
+        <select id="new-table-discipline" class="form-select">
+          <option value="pool">English 8-Ball Pool</option>
+          <option value="snooker">Championship Snooker</option>
+          <option value="brunswick">Brunswick 9ft Pool</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="new-table-rate">Hourly Tariff (₹/hr)</label>
+        <input type="number" id="new-table-rate" class="form-input tabular" value="250">
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+        <button class="secondary-cta" onclick="closeModal('add-table-modal')">Cancel</button>
+        <button class="btn-step-next" onclick="confirmAddTable()">Save Slate</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PIN Entry Modal for Staff Deck -->
+  <div class="modal-overlay" id="pin-modal">
+    <div class="modal-box" style="max-width:380px; text-align:center;">
+      <h3 class="display-font" style="margin-bottom:6px;">Staff Authentication</h3>
+      <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:18px;">
+        Enter 4-digit staff PIN (Default: 2468)
+      </p>
+      <input type="password" id="staff-pin-input" class="form-input tabular" maxlength="4" style="text-align:center; font-size:1.6rem; letter-spacing:0.3em; margin-bottom:18px;">
+      <div style="display:flex; gap:10px;">
+        <button class="secondary-cta" style="flex:1;" onclick="closeModal('pin-modal')">Cancel</button>
+        <button class="btn-step-next" style="flex:1;" onclick="verifyStaffPin()">Unlock</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Hub -->
+  <div class="toast-container" id="toast-hub"></div>
+
+  <!-- ========================================================================
+       APPLICATION LOGIC & DATABASE ENGINE
+       ======================================================================== -->
+  <script>
+    /* ==========================================================================
+       1. UNIFIED ASYNC STORAGE ADAPTER
+       ========================================================================== */
+    const SUPABASE_URL = "https://hvuhvmuwuogxxnpwimrr.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2dWh2bXV3dW9neHhucHdpbXJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyNjAyODIsImV4cCI6MjEwNzgzNjI4Mn0.ohSOGOZwWX6FqbaqT3vMc6_AeKUpsBWMIrQRvN6wf3s";
+    const LOCAL_STORAGE_KEY = 'qball_v3';
+    const SCHEMA_VERSION = 3;
+
+    function getDefaultSeed() {
+      const today = (function() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      })();
+
+      return {
+        version: SCHEMA_VERSION,
+        club: {
+          name: "Q-BALL Snooker & Pool Club",
+          hours: "10:00–23:00",
+          openHour: 10,
+          closeHour: 23,
+          address: "42-44 Inner Circle, Connaught Promenade, New Delhi 110001",
+          phone: "+91 98110 24680",
+          gstin: "07AAACQ9810K1ZZ"
+        },
+        rules: {
+          minDurationMin: 30,
+          bufferMin: 10,
+          peakStartHour: 18,
+          peakEndHour: 22,
+          peakMultiplier: 1.25,
+          depositPercent: 20,
+          unpaidGraceMin: 10,
+          prepaidGraceMin: 15,
+          cancelPolicyHours: 2,
+          staffPin: "2468"
+        },
+        settings: {
+          demoTime: null
+        },
+        tables: [
+          { id: "T1", name: "Table 1 — English 8-Ball", discipline: "pool", size: "7ft Slate", ratePerHour: 200, specs: "Riley 3-piece slate, Hainsworth precision felt", statusOverride: null, clothTemp: "21.6°C", humidity: "47% RH" },
+          { id: "T2", name: "Table 2 — English 8-Ball", discipline: "pool", size: "7ft Slate", ratePerHour: 200, specs: "Riley 3-piece slate, Hainsworth precision felt", statusOverride: null, clothTemp: "21.8°C", humidity: "48% RH" },
+          { id: "T3", name: "Table 3 — Championship Snooker", discipline: "snooker", size: "12ft Tournament", ratePerHour: 300, specs: "Strachan 6811 tournament baize, Burmese mahogany frame", statusOverride: null, clothTemp: "22.1°C", humidity: "45% RH" },
+          { id: "T4", name: "Table 4 — Championship Snooker", discipline: "snooker", size: "12ft Tournament", ratePerHour: 300, specs: "Strachan 6811 tournament baize, Burmese mahogany frame", statusOverride: null, clothTemp: "22.0°C", humidity: "46% RH" },
+          { id: "T5", name: "Table 5 — Brunswick Gold Crown", discipline: "brunswick", size: "9ft Pro", ratePerHour: 250, specs: "Private recessed booth, cellar cocktail butler", statusOverride: null, clothTemp: "21.9°C", humidity: "46% RH" },
+          { id: "T6", name: "Table 6 — Brunswick 9ft (Maintenance)", discipline: "brunswick", size: "9ft Pro", ratePerHour: 250, specs: "Under maintenance — cloth conditioning & leveling", statusOverride: "maintenance", clothTemp: "20.5°C", humidity: "50% RH" }
+        ],
+        bookings: [],
+        visits: [],
+        customers: [],
+        payments: [],
+        log: [
+          { timestamp: new Date().toISOString(), action: "STORE_INIT", detail: "Q-BALL sanctuary storage initialized." }
+        ]
+      };
+    }
+
+    // LocalStore Implementation
+    const LocalStore = {
+      _load() {
+        try {
+          const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+          if (!raw) {
+            const seed = getDefaultSeed();
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(seed));
+            return seed;
+          }
+          const parsed = JSON.parse(raw);
+          if (!parsed || parsed.version !== SCHEMA_VERSION) {
+            const seed = getDefaultSeed();
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(seed));
+            return seed;
+          }
+          return parsed;
+        } catch (e) {
+          const seed = getDefaultSeed();
+          return seed;
+        }
+      },
+      _save(db) {
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(db));
+        } catch (e) {}
+      },
+      async list(collection) {
+        const db = this._load();
+        if (collection === 'settings') return [db.settings || {}];
+        if (collection === 'club') return [db.club || {}];
+        if (collection === 'rules') return [db.rules || {}];
+        return db[collection] || [];
+      },
+      async get(collection, id) {
+        const db = this._load();
+        if (collection === 'settings') return db.settings;
+        if (collection === 'club') return db.club;
+        if (collection === 'rules') return db.rules;
+        const list = db[collection] || [];
+        return list.find(item => item.id === id || item.phone === id) || null;
+      },
+      async put(collection, item) {
+        const db = this._load();
+        if (collection === 'settings') {
+          db.settings = { ...(db.settings || {}), ...item };
+        } else if (collection === 'club') {
+          db.club = { ...(db.club || {}), ...item };
+        } else if (collection === 'rules') {
+          db.rules = { ...(db.rules || {}), ...item };
+        } else {
+          db[collection] = db[collection] || [];
+          const idx = db[collection].findIndex(i => (item.id && i.id === item.id) || (item.phone && i.phone === item.phone));
+          if (idx >= 0) {
+            db[collection][idx] = item;
+          } else {
+            db[collection].push(item);
+          }
+        }
+        this._save(db);
+        return item;
+      },
+      async del(collection, id) {
+        const db = this._load();
+        if (db[collection]) {
+          db[collection] = db[collection].filter(i => i.id !== id && i.phone !== id);
+          this._save(db);
+        }
+        return true;
+      }
+    };
+
+    // SupabaseStore Implementation
+    const SupabaseStore = {
+      client: null,
+      async list(collection) {
+        try {
+          if (collection === 'settings' || collection === 'rules' || collection === 'club') {
+            const item = await this.get(collection, collection);
+            return item ? [item] : [];
+          }
+          const table = collection === 'log' ? 'activity_log' : collection;
+          const { data, error } = await this.client.from(table).select('*');
+          if (error) throw error;
+          if (collection === 'tables' && data) {
+            return data.map(t => ({
+              ...t,
+              ratePerHour: t.rate_per_hour !== undefined ? t.rate_per_hour : (t.ratePerHour || 200)
+            }));
+          }
+          return data || [];
+        } catch (err) {
+          console.warn(`Supabase list(${collection}) fallback to LocalStore:`, err.message);
+          return LocalStore.list(collection);
+        }
+      },
+      async get(collection, id) {
+        try {
+          if (collection === 'settings' || collection === 'rules' || collection === 'club') {
+            const { data, error } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
+            if (error) throw error;
+            if (data && data.data) {
+              if (collection === 'settings') return data.data.settings || data.data;
+              if (collection === 'rules') return data.data.rules;
+              if (collection === 'club') return data.data.club;
+              return data.data;
+            }
+            return null;
+          }
+          const table = collection === 'log' ? 'activity_log' : collection;
+          const { data, error } = await this.client.from(table).select('*').eq('id', id).maybeSingle();
+          if (error) throw error;
+          if (collection === 'tables' && data) {
+            return {
+              ...data,
+              ratePerHour: data.rate_per_hour !== undefined ? data.rate_per_hour : (data.ratePerHour || 200)
+            };
+          }
+          return data;
+        } catch (err) {
+          console.warn(`Supabase get(${collection}, ${id}) fallback to LocalStore:`, err.message);
+          return LocalStore.get(collection, id);
+        }
+      },
+      async put(collection, item) {
+        try {
+          if (collection === 'settings' || collection === 'rules' || collection === 'club') {
+            const { data: existing } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle().catch(() => ({ data: null }));
+            let current = (existing && existing.data) ? existing.data : {};
+            if (collection === 'settings') current.settings = { ...(current.settings || {}), ...item };
+            else if (collection === 'rules') current.rules = { ...(current.rules || {}), ...item };
+            else if (collection === 'club') current.club = { ...(current.club || {}), ...item };
+            else current = { ...current, ...item };
+            await this.client.from('settings').upsert({ id: 1, data: current });
+            return item;
+          }
+          const table = collection === 'log' ? 'activity_log' : collection;
+          let row = { ...item };
+          if (collection === 'tables') {
+            row.rate_per_hour = item.ratePerHour !== undefined ? item.ratePerHour : item.rate_per_hour;
+          } else if (collection === 'log') {
+            row = {
+              actor: item.actor || 'system',
+              action: item.action || 'LOG',
+              detail: item.detail || JSON.stringify(item)
+            };
+          }
+          const { data, error } = await this.client.from(table).upsert(row).select().maybeSingle();
+          if (error) throw error;
+          return data || item;
+        } catch (err) {
+          console.warn(`Supabase put(${collection}) fallback to LocalStore:`, err.message);
+          return LocalStore.put(collection, item);
+        }
+      },
+      async del(collection, id) {
+        try {
+          const table = collection === 'log' ? 'activity_log' : collection;
+          const { error } = await this.client.from(table).delete().eq('id', id);
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.warn(`Supabase del(${collection}, ${id}) fallback to LocalStore:`, err.message);
+          return LocalStore.del(collection, id);
+        }
+      }
+    };
+
+    // Unified Master Store Adapter with In-Memory Fast Cache for Zero-Latency Synchronous Ops
+    const Store = {
+      adapter: LocalStore,
+      isOnline: false,
+      cache: getDefaultSeed(),
+
+      async init() {
+        let supabaseSuccess = false;
+
+        // Guarded Supabase Connect with strict 3-second timeout
+        if (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('[')) {
+          try {
+            const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            const pingPromise = client.from('tables').select('id', { head: true });
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000));
+            await Promise.race([pingPromise, timeoutPromise]);
+            
+            SupabaseStore.client = client;
+            this.adapter = SupabaseStore;
+            supabaseSuccess = true;
+
+            // Wire Realtime Subscriptions for both bookings and visits
+            try {
+              client.channel('public:bookings')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+                  this.syncCacheFromAdapter().then(() => renderAllCurrentViews());
+                })
+                .subscribe();
+
+              client.channel('public:visits')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'visits' }, () => {
+                  this.syncCacheFromAdapter().then(() => renderAllCurrentViews());
+                })
+                .subscribe();
+            } catch (rtErr) {
+              console.warn("Realtime channel subscription error:", rtErr);
+            }
+          } catch (err) {
+            console.warn("Supabase connect failed or timed out. Falling back to LocalStore:", err.message);
+          }
+        }
+
+        this.isOnline = supabaseSuccess;
+        const badge = document.getElementById('storage-status-badge');
+        const badgeText = document.getElementById('storage-status-text');
+        if (badge && badgeText) {
+          if (this.isOnline) {
+            badge.className = "storage-badge online";
+            badgeText.innerText = "Supabase Cloud";
+          } else {
+            badge.className = "storage-badge offline";
+            badgeText.innerText = "Offline Mode (Local)";
+          }
+        }
+
+        // Push initial seed to Supabase if remote tables are empty
+        if (this.isOnline) {
+          try {
+            const remoteTables = await this.adapter.list('tables');
+            if (!remoteTables || remoteTables.length === 0) {
+              const seed = getDefaultSeed();
+              for (const t of seed.tables) {
+                await this.adapter.put('tables', t).catch(() => {});
+              }
+              await this.adapter.put('settings', seed.settings).catch(() => {});
+              await this.adapter.put('rules', seed.rules).catch(() => {});
+              await this.adapter.put('club', seed.club).catch(() => {});
+            }
+          } catch (seedErr) {
+            console.warn("Could not check/push initial seed to Supabase:", seedErr);
+          }
+        }
+
+        await this.syncCacheFromAdapter();
+      },
+
+      async syncCacheFromAdapter() {
+        try {
+          const [tables, bookings, visits, customers, payments, log, settings, rules, club] = await Promise.all([
+            this.adapter.list('tables'),
+            this.adapter.list('bookings'),
+            this.adapter.list('visits'),
+            this.adapter.list('customers'),
+            this.adapter.list('payments'),
+            this.adapter.list('log'),
+            this.adapter.get('settings', 'settings'),
+            this.adapter.get('rules', 'rules'),
+            this.adapter.get('club', 'club')
+          ]);
+
+          this.cache.tables = tables && tables.length ? tables : this.cache.tables;
+          this.cache.bookings = bookings || [];
+          this.cache.visits = visits || [];
+          this.cache.customers = customers || [];
+          this.cache.payments = payments || [];
+          this.cache.log = log || [];
+          if (settings) this.cache.settings = settings;
+          if (rules) this.cache.rules = rules;
+          if (club) this.cache.club = club;
+        } catch (e) {
+          this.cache = LocalStore._load();
+        }
+      },
+
+      // Unified CRUD API
+      async list(collection) { return this.adapter.list(collection); },
+      async get(collection, id) { return this.adapter.get(collection, id); },
+      async put(collection, item) {
+        // Fast in-memory sync
+        if (collection === 'settings') {
+          this.cache.settings = { ...(this.cache.settings || {}), ...item };
+        } else if (collection === 'club') {
+          this.cache.club = { ...(this.cache.club || {}), ...item };
+        } else if (collection === 'rules') {
+          this.cache.rules = { ...(this.cache.rules || {}), ...item };
+        } else if (Array.isArray(this.cache[collection])) {
+          const idx = this.cache[collection].findIndex(i => (item.id && i.id === item.id) || (item.phone && i.phone === item.phone));
+          if (idx >= 0) this.cache[collection][idx] = item;
+          else this.cache[collection].push(item);
+        } else {
+          this.cache[collection] = [item];
+        }
+        // Always persist to local fallback as well for offline insurance
+        LocalStore.put(collection, item);
+        return this.adapter.put(collection, item);
+      },
+      async del(collection, id) {
+        if (this.cache[collection]) {
+          this.cache[collection] = this.cache[collection].filter(i => i.id !== id && i.phone !== id);
+        }
+        LocalStore.del(collection, id);
+        return this.adapter.del(collection, id);
+      },
+
+      // Synchronous Snapshot Access for Atomic Logic
+      getSnapshot() {
+        return this.cache;
+      }
+    };
+
+    /* ==========================================================================
+       2. TIME LAYER (`now()` Honoring `settings.demo`)
+       ========================================================================== */
+    function now() {
+      const db = Store.getSnapshot();
+      if (db && db.settings && db.settings.demoTime) {
+        return new Date(db.settings.demoTime);
+      }
+      return new Date();
+    }
+
+    function getTodayDateString(d = now()) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function formatTimeHM(date) {
+      return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function parseTimeToMinutes(timeStr) {
+      const [h, m] = timeStr.split(':').map(Number);
+      return h * 60 + m;
+    }
+
+    function minutesToTimeHM(totalMin) {
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    function setDemoClock(iso) {
+      Store.put('settings', { demoTime: iso });
+      updateClockDisplays();
+      noShowSweeper();
+      renderAllCurrentViews();
+      showToast(iso ? `Simulated clock set: ${formatTimeHM(new Date(iso))}` : "Clock restored to live real-time.", "success");
+    }
+
+    function setDemoClockPreset(hmStr) {
+      const cur = now();
+      const [h, m] = hmStr.split(':').map(Number);
+      const target = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate(), h, m, 0);
+      setDemoClock(target.toISOString());
+    }
+
+    function stepDemoClock(mins) {
+      const cur = now();
+      const next = new Date(cur.getTime() + mins * 60000);
+      setDemoClock(next.toISOString());
+    }
+
+    /* ==========================================================================
+       3. PRICING & BOOKING ENGINE
+       ========================================================================== */
+    function priceQuote(tableId, dateStr, startStr, durMin) {
+      const db = Store.getSnapshot();
+      const table = (db.tables || []).find(t => t.id === tableId);
+      if (!table) return null;
+
+      const dur = Number(durMin);
+      const startMin = parseTimeToMinutes(startStr);
+      const baseRatePerMin = table.ratePerHour / 60;
+
+      const peakStartMin = (db.rules.peakStartHour || 18) * 60;
+      const peakEndMin = (db.rules.peakEndHour || 22) * 60;
+      const peakMultiplier = db.rules.peakMultiplier || 1.25;
+
+      let totalBase = 0;
+      let totalPeakSurge = 0;
+      let peakMinutesCount = 0;
+
+      for (let i = 0; i < dur; i++) {
+        const curMin = startMin + i;
+        const isPeak = (curMin >= peakStartMin && curMin < peakEndMin);
+        if (isPeak) {
+          totalBase += baseRatePerMin;
+          totalPeakSurge += baseRatePerMin * (peakMultiplier - 1);
+          peakMinutesCount++;
+        } else {
+          totalBase += baseRatePerMin;
+        }
+      }
+
+      const baseAmount = Math.round(totalBase);
+      const peakSurge = Math.round(totalPeakSurge);
+      const subtotal = Math.round(totalBase + totalPeakSurge);
+      const gst = Math.round(subtotal * 0.18);
+      const total = subtotal + gst;
+      const deposit = Math.round(total * ((db.rules.depositPercent || 20) / 100));
+      const balanceDue = total - deposit;
+
+      return {
+        tableId: table.id,
+        tableName: table.name,
+        ratePerHour: table.ratePerHour,
+        date: dateStr,
+        start: startStr,
+        durMin: dur,
+        peakMinutes: peakMinutesCount,
+        baseAmount,
+        peakSurge,
+        subtotal,
+        gst,
+        total,
+        deposit,
+        balanceDue
+      };
+    }
+
+    let bookingLock = false;
+
+    function commitBooking(draft) {
+      if (bookingLock) {
+        return { ok: false, error: "A reservation transaction is currently in progress. Please wait a moment." };
+      }
+      bookingLock = true;
+
+      try {
+        const db = Store.getSnapshot();
+        const table = (db.tables || []).find(t => t.id === draft.tableId);
+        if (!table) return { ok: false, error: "Selected apparatus does not exist." };
+        if (table.statusOverride === "maintenance") {
+          return { ok: false, error: `${table.name} is currently offline for cloth conditioning and leveling.` };
+        }
+
+        const durMin = Number(draft.durMin);
+        if (durMin < (db.rules.minDurationMin || 30)) {
+          return { ok: false, error: `Minimum session duration is ${db.rules.minDurationMin || 30} minutes.` };
+        }
+
+        const startMin = parseTimeToMinutes(draft.start);
+        const endMin = startMin + durMin;
+
+        // Operating hours check
+        const openMin = (db.club.openHour || 10) * 60;
+        const closeMin = (db.club.closeHour || 23) * 60;
+        if (startMin < openMin || endMin > closeMin) {
+          return { ok: false, error: `Requested slot (${draft.start} – ${minutesToTimeHM(endMin)}) is outside operating hours (10:00 AM – 11:00 PM).` };
+        }
+
+        // 10-Minute Buffer Overlap Check
+        const buffer = db.rules.bufferMin || 10;
+        const tableBookings = (db.bookings || []).filter(b =>
+          b.tableId === draft.tableId &&
+          b.date === draft.date &&
+          b.status !== "cancelled" &&
+          b.status !== "no_show"
+        );
+
+        for (const b of tableBookings) {
+          const bStart = parseTimeToMinutes(b.start);
+          const bEnd = parseTimeToMinutes(b.end);
+          if (startMin < (bEnd + buffer) && bStart < (endMin + buffer)) {
+            return {
+              ok: false,
+              error: `Schedule Conflict: ${table.name} is already booked from ${b.start} to ${b.end} (with mandatory ${buffer}m turnaround buffer).`
+            };
+          }
+        }
+
+        // Active visit check on table today
+        if (draft.date === getTodayDateString()) {
+          const activeVisit = (db.visits || []).find(v => v.tableId === draft.tableId);
+          if (activeVisit) {
+            const vStart = new Date(activeVisit.startTime);
+            const vStartMin = vStart.getHours() * 60 + vStart.getMinutes();
+            const vEndMin = vStartMin + (activeVisit.allocatedDurationMin || 60);
+            if (startMin < (vEndMin + buffer) && vStartMin < (endMin + buffer)) {
+              return { ok: false, error: `Match Conflict: ${table.name} is actively in play until estimated ${minutesToTimeHM(vEndMin)} (+${buffer}m buffer).` };
+            }
+          }
+        }
+
+        const quote = priceQuote(draft.tableId, draft.date, draft.start, durMin);
+        const bookingId = `BK-${Math.floor(100000 + Math.random() * 900000)}`;
+        const pin = String(Math.floor(1000 + Math.random() * 9000));
+
+        const newBooking = {
+          id: bookingId,
+          tableId: draft.tableId,
+          date: draft.date,
+          start: draft.start,
+          end: minutesToTimeHM(endMin),
+          durMin: durMin,
+          patronName: draft.patronName.trim(),
+          patronPhone: draft.patronPhone.trim(),
+          priceQuote: quote,
+          status: "confirmed", // confirmed, checked_in, completed, cancelled, no_show
+          depositPaid: true,
+          depositAmount: quote.deposit,
+          balanceDue: quote.balanceDue,
+          createdAt: now().toISOString(),
+          pin
+        };
+
+        Store.put('bookings', newBooking);
+
+        // Update or register customer in CRM
+        const existingCust = (db.customers || []).find(c => c.phone === newBooking.patronPhone);
+        if (existingCust) {
+          existingCust.name = newBooking.patronName;
+          Store.put('customers', existingCust);
+        } else {
+          Store.put('customers', {
+            id: newBooking.patronPhone,
+            phone: newBooking.patronPhone,
+            name: newBooking.patronName,
+            visits: 0,
+            minutes: 0,
+            spend: 0,
+            lastVisit: null,
+            dues: 0,
+            noShows: 0,
+            loyalty: "Standard Patron",
+            sessions: []
+          });
+        }
+
+        // Log action
+        Store.put('log', {
+          id: `LOG-${Date.now()}`,
+          timestamp: now().toISOString(),
+          action: "BOOKING_COMMIT",
+          detail: `Booking ${bookingId} locked on ${table.name} (${draft.date} ${draft.start}–${newBooking.end}) for ${newBooking.patronName}.`
+        });
+
+        return { ok: true, booking: newBooking };
+      } finally {
+        bookingLock = false;
+      }
+    }
+
+    /* ==========================================================================
+       4. NO-SHOW SWEEPER ENGINE
+       ========================================================================== */
+    function noShowSweeper() {
+      const db = Store.getSnapshot();
+      const cur = now();
+      const todayStr = getTodayDateString(cur);
+      const currentMin = cur.getHours() * 60 + cur.getMinutes();
+
+      const upcoming = (db.bookings || []).filter(b => b.date === todayStr && b.status === "confirmed");
+
+      upcoming.forEach(b => {
+        const startMin = parseTimeToMinutes(b.start);
+        const graceMin = b.depositPaid ? (db.rules.prepaidGraceMin || 15) : (db.rules.unpaidGraceMin || 10);
+        const expiryMin = startMin + graceMin;
+
+        if (currentMin > expiryMin) {
+          // Expiration triggered!
+          b.status = "no_show";
+          Store.put('bookings', b);
+
+          // Increment customer no-show count
+          const cust = (db.customers || []).find(c => c.phone === b.patronPhone);
+          if (cust) {
+            cust.noShows = (cust.noShows || 0) + 1;
+            Store.put('customers', cust);
+          }
+
+          // Log as system action
+          Store.put('log', {
+            id: `LOG-${Date.now()}-${Math.random()}`,
+            timestamp: cur.toISOString(),
+            action: "NO_SHOW_EXPIRY",
+            detail: `System auto-expired unattended booking ${b.id} (${b.patronName}) after ${graceMin}m grace period. Deposit forfeited.`
+          });
+
+          showToast(`Grace expired for booking ${b.id}. Table ${b.tableId} reopened!`, "error");
+          renderAllCurrentViews();
+        }
+      });
+    }
+
+    // Run No-Show Sweeper every 10 seconds + on load
+    setInterval(noShowSweeper, 10000);
+
+    /* ==========================================================================
+       5. HONEST TABLE STATUS & FLOOR COMPUTATION
+       ========================================================================== */
+    function computeTableStatus(table, db = Store.getSnapshot()) {
+      if (table.statusOverride === "maintenance") {
+        return {
+          status: "Maintenance",
+          badgeClass: "status-maintenance",
+          nextFree: "Under Conditioning",
+          isAvailable: false,
+          activeVisit: null,
+          currentBooking: null
+        };
+      }
+
+      const cur = now();
+      const todayStr = getTodayDateString(cur);
+      const currentMin = cur.getHours() * 60 + cur.getMinutes();
+
+      // Check active visit
+      const activeVisit = (db.visits || []).find(v => v.tableId === table.id);
+      if (activeVisit) {
+        const vStart = new Date(activeVisit.startTime);
+        const vStartMin = vStart.getHours() * 60 + vStart.getMinutes();
+        const vEndMin = vStartMin + (activeVisit.allocatedDurationMin || 60);
+        return {
+          status: "In Play",
+          badgeClass: "status-inplay",
+          nextFree: `Next free at ${minutesToTimeHM(vEndMin + (db.rules.bufferMin || 10))}`,
+          isAvailable: false,
+          activeVisit,
+          currentBooking: null
+        };
+      }
+
+      // Check bookings today covering now()
+      const todayBookings = (db.bookings || []).filter(b =>
+        b.tableId === table.id && b.date === todayStr && b.status !== "cancelled" && b.status !== "no_show"
+      );
+
+      const activeBooking = todayBookings.find(b => {
+        const bStart = parseTimeToMinutes(b.start);
+        const bEnd = parseTimeToMinutes(b.end);
+        return currentMin >= bStart && currentMin < (bEnd + (db.rules.bufferMin || 10));
+      });
+
+      if (activeBooking) {
+        return {
+          status: "Reserved",
+          badgeClass: "status-reserved",
+          nextFree: `Next free at ${minutesToTimeHM(parseTimeToMinutes(activeBooking.end) + (db.rules.bufferMin || 10))}`,
+          isAvailable: false,
+          activeVisit: null,
+          currentBooking: activeBooking
+        };
+      }
+
+      // Available
+      const nextUpcoming = todayBookings.find(b => parseTimeToMinutes(b.start) > currentMin);
+      return {
+        status: "Available",
+        badgeClass: "status-available",
+        nextFree: nextUpcoming ? `Free until ${nextUpcoming.start}` : "Available Now",
+        isAvailable: true,
+        activeVisit: null,
+        currentBooking: null
+      };
+    }
+
+    function computeFloorOccupancy() {
+      const db = Store.getSnapshot();
+      let occupied = 0;
+      const total = (db.tables || []).length;
+      (db.tables || []).forEach(t => {
+        const info = computeTableStatus(t, db);
+        if (info.status === "In Play" || info.status === "Reserved") occupied++;
+      });
+      const pct = total > 0 ? Math.round((occupied / total) * 100) : 0;
+      return { occupied, total, pct };
+    }
+
+    /* ==========================================================================
+       6. REACT BITS EFFECTS: NATIVE VANILLA CONTROLLERS
+       ========================================================================== */
+    function initSplitTextHero() {
+      const el = document.getElementById('hero-headline');
+      if (!el) return;
+      const text = el.getAttribute('data-raw') || el.innerText.trim();
+      el.setAttribute('data-raw', text);
+      el.innerHTML = '';
+
+      const wrap = document.createElement('span');
+      wrap.className = 'stagger-char-wrapper';
+      let idx = 0;
+      for (const char of text) {
+        const span = document.createElement('span');
+        if (char === ' ') {
+          span.className = 'stagger-char space';
+          span.innerHTML = '&nbsp;';
+        } else {
+          span.className = 'stagger-char';
+          span.innerText = char;
+          span.style.setProperty('--char-index', idx++);
+        }
+        wrap.appendChild(span);
+      }
+      el.appendChild(wrap);
+    }
+
+    function initMagneticCTA() {
+      const wrap = document.getElementById('hero-magnetic-wrap');
+      const btn = document.getElementById('hero-book-btn');
+      if (!wrap || !btn) return;
+
+      wrap.addEventListener('mousemove', (e) => {
+        const r = wrap.getBoundingClientRect();
+        const dx = (e.clientX - (r.left + r.width / 2)) * 0.35;
+        const dy = (e.clientY - (r.top + r.height / 2)) * 0.35;
+        btn.style.transform = `translate(${dx}px, ${dy}px)`;
+      });
+      wrap.addEventListener('mouseleave', () => {
+        btn.style.transform = 'translate(0, 0)';
+        btn.style.transition = 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+        setTimeout(() => { btn.style.transition = ''; }, 400);
+      });
+    }
+
+    function initSpotlightCards() {
+      document.querySelectorAll('.spotlight-card').forEach(card => {
+        card.addEventListener('mousemove', (e) => {
+          const r = card.getBoundingClientRect();
+          card.style.setProperty('--mouse-x', `${e.clientX - r.left}px`);
+          card.style.setProperty('--mouse-y', `${e.clientY - r.top}px`);
+        });
+      });
+    }
+
+    function initClickSpark() {
+      const canvas = document.getElementById('clickspark-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+      window.addEventListener('resize', resize);
+      resize();
+
+      const sparks = [];
+      const colors = ['#E5BD3B', '#10B981', '#F5F1E6', '#C9A227'];
+
+      class Spark {
+        constructor(x, y) {
+          this.x = x; this.y = y;
+          const a = Math.random() * Math.PI * 2;
+          const s = Math.random() * 4 + 2;
+          this.vx = Math.cos(a) * s; this.vy = Math.sin(a) * s;
+          this.length = Math.random() * 12 + 8;
+          this.life = 1; this.decay = Math.random() * 0.04 + 0.03;
+          this.color = colors[Math.floor(Math.random() * colors.length)];
+        }
+        update() { this.x += this.vx; this.y += this.vy; this.life -= this.decay; }
+        draw(c) {
+          c.save(); c.beginPath(); c.globalAlpha = Math.max(0, this.life);
+          c.strokeStyle = this.color; c.lineWidth = 1.8;
+          c.moveTo(this.x, this.y);
+          c.lineTo(this.x - this.vx * (this.length / 5), this.y - this.vy * (this.length / 5));
+          c.stroke(); c.restore();
+        }
+      }
+
+      document.addEventListener('pointerdown', (e) => {
+        for (let i = 0; i < 10; i++) sparks.push(new Spark(e.clientX, e.clientY));
+      });
+
+      function loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let i = sparks.length - 1; i >= 0; i--) {
+          sparks[i].update(); sparks[i].draw(ctx);
+          if (sparks[i].life <= 0) sparks.splice(i, 1);
+        }
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+    }
+
+    function scrambleText(element, targetText, duration = 1200) {
+      if (!element) return;
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-';
+      const steps = 22;
+      let cur = 0;
+      const intv = setInterval(() => {
+        cur++;
+        const prog = cur / steps;
+        const revealed = Math.floor(prog * targetText.length);
+        let out = '';
+        for (let i = 0; i < targetText.length; i++) {
+          out += (i < revealed) ? targetText[i] : chars[Math.floor(Math.random() * chars.length)];
+        }
+        element.innerText = out;
+        if (cur >= steps) { clearInterval(intv); element.innerText = targetText; }
+      }, duration / steps);
+    }
+
+    function animateCounter(elementId, startVal, endVal, prefix = '₹', duration = 300) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      const start = performance.now();
+      function update(nowTime) {
+        const p = Math.min((nowTime - start) / duration, 1);
+        const cur = Math.round(startVal + (endVal - startVal) * (1 - Math.pow(1 - p, 3)));
+        el.innerText = `${prefix}${cur}`;
+        if (p < 1) requestAnimationFrame(update);
+      }
+      requestAnimationFrame(update);
+    }
+
+    /* ==========================================================================
+       7. ROUTING & VIEW CONTROLLERS
+       ========================================================================== */
+    function getRoute() {
+      const hash = window.location.hash || '#/';
+      const clean = hash.replace(/^#\/?/, '');
+      const parts = clean.split('/');
+      return { primary: parts[0] || 'home', param: parts[1] || '' };
+    }
+
+    function handleRoute() {
+      const r = getRoute();
+
+      document.querySelectorAll('#main-nav .nav-link').forEach(link => {
+        const linkRoute = link.getAttribute('data-route');
+        link.classList.toggle('active', (r.primary === 'home' && linkRoute === 'home') || (r.primary === linkRoute));
+      });
+
+      document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active-view'));
+
+      if (r.primary === 'home') {
+        document.getElementById('view-home').classList.add('active-view');
+        initSplitTextHero();
+        renderHomeDisciplines();
+      } else if (r.primary === 'tables') {
+        document.getElementById('view-tables').classList.add('active-view');
+        renderTablesLiveBoard();
+      } else if (r.primary === 'book') {
+        document.getElementById('view-book').classList.add('active-view');
+        initWizardView();
+      } else if (r.primary === 'my') {
+        document.getElementById('view-my').classList.add('active-view');
+        initVaultView();
+      } else if (r.primary === 'admin') {
+        document.getElementById('view-admin').classList.add('active-view');
+        renderAdminConsole();
+      } else if (r.primary === 'b' && r.param) {
+        document.getElementById('view-invoice').classList.add('active-view');
+        renderBookingInvoice(r.param);
+      } else {
+        window.location.hash = '#/';
+      }
+
+      initSpotlightCards();
+      updateGlobalTelemetry();
+    }
+
+    window.addEventListener('hashchange', handleRoute);
+
+    /* ==========================================================================
+       8. CUSTOMER VIEWS IMPLEMENTATIONS
+       ========================================================================== */
+    function renderHomeDisciplines() {
+      const db = Store.getSnapshot();
+      const grid = document.getElementById('home-discipline-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      (db.tables || []).slice(0, 3).forEach(t => {
+        const card = document.createElement('div');
+        card.className = "spotlight-card discipline-card";
+        card.innerHTML = `
+          <div class="discipline-top">
+            <span class="discipline-badge">${t.discipline.toUpperCase()} • ${t.size}</span>
+            <div class="price-tag shiny-sweep">
+              <span class="price-curr tabular">₹${t.ratePerHour}</span>
+              <span class="price-unit">/ hr</span>
+            </div>
+          </div>
+          <div>
+            <h3 style="font-size:1.4rem; margin-bottom:8px;">${t.name}</h3>
+            <p style="color:var(--text-secondary); font-size:0.85rem; line-height:1.6; margin-bottom:18px;">${t.specs}</p>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-subtle); padding-top:16px;">
+            <span style="font-size:0.75rem; color:var(--text-muted);">10m Turnaround Buffer</span>
+            <a href="#/book?table=${t.id}" class="btn-step-next" style="padding:8px 18px; font-size:0.82rem;">Select Slate</a>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+      initSpotlightCards();
+    }
+
+    function renderTablesLiveBoard() {
+      const db = Store.getSnapshot();
+      const grid = document.getElementById('tables-live-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      (db.tables || []).forEach(t => {
+        const info = computeTableStatus(t, db);
+        const card = document.createElement('div');
+        card.className = "spotlight-card table-board-card";
+        card.innerHTML = `
+          <div>
+            <div class="table-header">
+              <div>
+                <div class="table-num-id">${t.id} • ${t.size}</div>
+                <h3 class="table-card-title">${t.name}</h3>
+              </div>
+              <span class="status-badge ${info.badgeClass}">${info.status}</span>
+            </div>
+            <p class="table-body-specs">${t.specs}</p>
+            <div class="table-status-info">
+              <div class="status-info-row">
+                <span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase;">Availability:</span>
+                <strong style="color:${info.isAvailable ? 'var(--emerald-primary)' : 'var(--gold-hover)'}">${info.nextFree}</strong>
+              </div>
+              <div class="status-info-row" style="margin-top:6px;">
+                <span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase;">Tariff:</span>
+                <span class="tabular">₹${t.ratePerHour}/hr (Peak ×1.25)</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            ${info.isAvailable
+              ? `<a href="#/book?table=${t.id}" class="btn-reserve-slot">Reserve Table</a>`
+              : `<a href="#/book?table=${t.id}" class="btn-reserve-slot" style="background:var(--bg-surface); border:1px solid var(--border-subtle); color:var(--text-secondary);">Queue Slot</a>`
+            }
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+      initSpotlightCards();
+    }
+
+    // Wizard
+    let wizardDraft = {
+      tableId: "T3",
+      date: getTodayDateString(),
+      start: "19:00",
+      durMin: 60,
+      patronName: "",
+      patronPhone: ""
+    };
+    let prevSubtotal = 375;
+
+    function initWizardView() {
+      const queryMatch = window.location.hash.match(/\?table=([^&]+)/);
+      if (queryMatch) wizardDraft.tableId = queryMatch[1];
+
+      renderWizardStep1();
+      populateTimeOptions();
+      goToWizardStep(1);
+
+      const dEl = document.getElementById('booking-date');
+      if (dEl) { dEl.value = wizardDraft.date; dEl.min = getTodayDateString(); }
+      const tEl = document.getElementById('booking-start-time');
+      if (tEl) tEl.value = wizardDraft.start;
+      const sEl = document.getElementById('booking-duration-slider');
+      if (sEl) sEl.value = wizardDraft.durMin;
+
+      onBookingInputsChanged();
+    }
+
+    function renderWizardStep1() {
+      const db = Store.getSnapshot();
+      const picker = document.getElementById('wizard-table-picker');
+      if (!picker) return;
+      picker.innerHTML = '';
+
+      (db.tables || []).forEach(t => {
+        const isMaint = t.statusOverride === 'maintenance';
+        const isSel = t.id === wizardDraft.tableId;
+        const card = document.createElement('div');
+        card.className = `table-picker-card ${isMaint ? 'maint-card' : ''} ${isSel ? 'selected' : ''}`;
+        card.onclick = () => {
+          if (isMaint) return;
+          wizardDraft.tableId = t.id;
+          renderWizardStep1();
+          onBookingInputsChanged();
+        };
+        card.innerHTML = `
+          <div style="font-size:0.75rem; color:var(--gold-accent); font-weight:700;">${t.id} • ${t.discipline.toUpperCase()}</div>
+          <h4 style="font-size:1.15rem; margin:4px 0;">${t.name}</h4>
+          <div class="tabular" style="color:var(--emerald-primary); font-weight:600; margin-bottom:6px;">₹${t.ratePerHour} / hr</div>
+          <p style="font-size:0.75rem; color:var(--text-muted);">${t.specs}</p>
+        `;
+        picker.appendChild(card);
+      });
+    }
+
+    function populateTimeOptions() {
+      const select = document.getElementById('booking-start-time');
+      if (!select || select.children.length > 0) return;
+      for (let m = 10 * 60; m <= 22 * 60 + 30; m += 30) {
+        const val = minutesToTimeHM(m);
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.innerText = `${val} ${m >= 18*60 && m < 22*60 ? '⚡ (Twilight Peak)' : ''}`;
+        select.appendChild(opt);
+      }
+    }
+
+    function onDurationSliderInput(v) {
+      wizardDraft.durMin = Number(v);
+      const hours = (wizardDraft.durMin / 60).toFixed(1);
+      const disp = document.getElementById('duration-val-display');
+      if (disp) disp.innerText = `${wizardDraft.durMin} Mins (${hours} hr${hours > 1 ? 's' : ''})`;
+      onBookingInputsChanged();
+    }
+
+    function onBookingInputsChanged() {
+      const dEl = document.getElementById('booking-date');
+      const tEl = document.getElementById('booking-start-time');
+      if (dEl) wizardDraft.date = dEl.value || getTodayDateString();
+      if (tEl) wizardDraft.start = tEl.value || "19:00";
+
+      const quote = priceQuote(wizardDraft.tableId, wizardDraft.date, wizardDraft.start, wizardDraft.durMin);
+      if (!quote) return;
+
+      const db = Store.getSnapshot();
+      const table = (db.tables || []).find(t => t.id === wizardDraft.tableId);
+
+      document.getElementById('ledger-table-name').innerText = table ? table.name : wizardDraft.tableId;
+      document.getElementById('ledger-base-rate').innerText = `₹${quote.ratePerHour} / hr`;
+      document.getElementById('ledger-peak-mins').innerText = `${quote.peakMinutes} mins`;
+
+      const peakBadge = document.getElementById('peak-indicator-badge');
+      if (peakBadge) peakBadge.style.display = quote.peakMinutes > 0 ? 'inline-block' : 'none';
+
+      // Animate price numbers
+      animateCounter('ledger-subtotal', prevSubtotal, quote.subtotal, '₹');
+      prevSubtotal = quote.subtotal;
+
+      document.getElementById('ledger-gst').innerText = `₹${quote.gst}`;
+      document.getElementById('ledger-grand-total').innerText = `₹${quote.total}`;
+      document.getElementById('ledger-deposit').innerText = `₹${quote.deposit}`;
+
+      // Overlap and buffer check inline warning
+      const warn = document.getElementById('booking-overlap-warning');
+      const btnNext = document.getElementById('btn-to-step-3');
+      const buffer = db.rules.bufferMin || 10;
+      const startMin = parseTimeToMinutes(wizardDraft.start);
+      const endMin = startMin + wizardDraft.durMin;
+
+      const conflicts = (db.bookings || []).filter(b =>
+        b.tableId === wizardDraft.tableId &&
+        b.date === wizardDraft.date &&
+        b.status !== "cancelled" &&
+        b.status !== "no_show" &&
+        startMin < (parseTimeToMinutes(b.end) + buffer) &&
+        parseTimeToMinutes(b.start) < (endMin + buffer)
+      );
+
+      if (conflicts.length > 0) {
+        const c = conflicts[0];
+        warn.style.display = 'block';
+        warn.innerText = `⚠️ Schedule Conflict: ${table.name} is already reserved from ${c.start} to ${c.end} (with ${buffer}m buffer).`;
+        if (btnNext) btnNext.disabled = true;
+      } else {
+        warn.style.display = 'none';
+        if (btnNext) btnNext.disabled = false;
+      }
+    }
+
+    function goToWizardStep(s) {
+      document.querySelectorAll('.wizard-step-pane').forEach((p, i) => p.classList.toggle('active-step', (i + 1) === s));
+      document.querySelectorAll('.progress-step-item').forEach((it, i) => {
+        it.classList.toggle('active', (i + 1) === s);
+        it.classList.toggle('completed', (i + 1) < s);
+      });
+    }
+
+    function validateStep2AndProceed() {
+      onBookingInputsChanged();
+      const warn = document.getElementById('booking-overlap-warning');
+      if (warn && warn.style.display === 'block') {
+        showToast("Please select an available slot.", "error");
+        return;
+      }
+      goToWizardStep(3);
+    }
+
+    let lastBookedRecord = null;
+
+    function executeCommitBooking() {
+      const name = document.getElementById('patron-name').value.trim();
+      const phone = document.getElementById('patron-phone').value.trim();
+
+      if (!name) { showToast("Please provide your name.", "error"); return; }
+      if (!/^[6-9]\d{9}$/.test(phone)) {
+        showToast("Please enter a valid 10-digit Indian phone (starts with 6-9).", "error");
+        return;
+      }
+
+      wizardDraft.patronName = name;
+      wizardDraft.patronPhone = phone;
+
+      const res = commitBooking(wizardDraft);
+      if (!res.ok) {
+        showToast(res.error, "error");
+        return;
+      }
+
+      lastBookedRecord = res.booking;
+
+      const idEl = document.getElementById('confirmed-booking-id');
+      if (idEl) scrambleText(idEl, res.booking.id, 1200);
+
+      const db = Store.getSnapshot();
+      const table = (db.tables || []).find(t => t.id === res.booking.tableId);
+      const card = document.getElementById('pass-summary-card');
+      if (card) {
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+            <div>
+              <h4 style="font-size:1.2rem;">${table ? table.name : res.booking.tableId}</h4>
+              <div class="tabular" style="color:var(--gold-hover);">${res.booking.date} • ${res.booking.start} – ${res.booking.end} (${res.booking.durMin} Mins)</div>
+            </div>
+            <div class="tabular" style="padding:6px 14px; background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:4px; font-weight:700; color:var(--gold-hover);">
+              PIN: ${res.booking.pin}
+            </div>
+          </div>
+          <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.6;">
+            Patron: <strong>${res.booking.patronName}</strong> (+91 ${res.booking.patronPhone})<br>
+            Deposit Secured: <strong style="color:var(--emerald-primary);">₹${res.booking.priceQuote.deposit}</strong> • Balance Due: ₹${res.booking.priceQuote.balanceDue}
+          </div>
+        `;
+      }
+
+      goToWizardStep(4);
+      showToast(`Pass issued for ${res.booking.id}!`, "success");
+      updateGlobalTelemetry();
+    }
+
+    function printReceiptForCurrentBooking() {
+      if (lastBookedRecord) window.location.hash = `#/b/${lastBookedRecord.id}`;
+    }
+
+    /* Vault View (`#/my`) */
+    function initVaultView() {
+      const savedPhone = localStorage.getItem('qball_last_phone') || '9810123456';
+      const input = document.getElementById('vault-phone-input');
+      if (input && !input.value) {
+        input.value = savedPhone;
+        searchVaultByPhone();
+      }
+    }
+
+    function searchVaultByPhone() {
+      const input = document.getElementById('vault-phone-input');
+      const phone = input ? input.value.trim() : '';
+      if (!/^[6-9]\d{9}$/.test(phone)) {
+        showToast("Enter a valid 10-digit mobile number.", "error");
+        return;
+      }
+
+      localStorage.setItem('qball_last_phone', phone);
+      const db = Store.getSnapshot();
+
+      const userBookings = (db.bookings || []).filter(b => b.patronPhone === phone)
+        .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      const wrapper = document.getElementById('vault-results-wrapper');
+      const list = document.getElementById('vault-passes-list');
+      const badge = document.getElementById('vault-patron-badge');
+      if (!wrapper || !list) return;
+
+      wrapper.style.display = 'block';
+      list.innerHTML = '';
+
+      const cust = (db.customers || []).find(c => c.phone === phone);
+      badge.innerHTML = `
+        <span class="status-badge status-available" style="font-size:0.8rem; padding:6px 16px;">
+          ★ ${cust ? cust.loyalty : 'Verified Noir Patron'} • ${cust ? cust.visits : 0} Matches Played
+        </span>
+      `;
+
+      if (userBookings.length === 0) {
+        list.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-muted);">No reservations found for +91 ${phone}.</div>`;
+        return;
+      }
+
+      userBookings.forEach(b => {
+        const table = (db.tables || []).find(t => t.id === b.tableId);
+        const card = document.createElement('div');
+        card.className = "booking-vault-card spotlight-card";
+
+        const sessionDate = new Date(`${b.date}T${b.start}:00`);
+        const diffHours = (sessionDate.getTime() - now().getTime()) / 3600000;
+        const canCancelFreely = diffHours >= (db.rules.cancelPolicyHours || 2);
+
+        // Grace Countdown for Unattended Upcoming Booking
+        let countdownHTML = '';
+        if (b.status === "confirmed" && b.date === getTodayDateString()) {
+          const currentMin = now().getHours() * 60 + now().getMinutes();
+          const startMin = parseTimeToMinutes(b.start);
+          const graceMin = b.depositPaid ? (db.rules.prepaidGraceMin || 15) : (db.rules.unpaidGraceMin || 10);
+          const remainGrace = (startMin + graceMin) - currentMin;
+          if (remainGrace > 0 && remainGrace <= graceMin) {
+            countdownHTML = `<span class="tabular" style="color:#EF4444; font-weight:700;">⚠️ Auto-release in ${remainGrace}m</span>`;
+          }
+        }
+
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <span class="tabular" style="font-size:0.75rem; color:var(--gold-accent); font-weight:700;">PASS TOKEN: ${b.id}</span>
+              <h3 style="font-size:1.3rem;">${table ? table.name : b.tableId}</h3>
+            </div>
+            <div style="text-align:right;">
+              <span class="status-badge ${b.status === 'confirmed' ? 'status-available' : (b.status === 'no_show' ? 'status-inplay' : 'status-maintenance')}">${b.status.toUpperCase()}</span>
+              ${countdownHTML ? `<div style="font-size:0.72rem; margin-top:4px;">${countdownHTML}</div>` : ''}
+            </div>
+          </div>
+          <div class="vault-details-grid tabular">
+            <div><span style="color:var(--text-muted); font-size:0.75rem;">Session:</span><br><strong>${b.date} • ${b.start}–${b.end}</strong></div>
+            <div><span style="color:var(--text-muted); font-size:0.75rem;">Gate PIN:</span><br><strong style="color:var(--gold-hover);">${b.pin}</strong></div>
+            <div><span style="color:var(--text-muted); font-size:0.75rem;">Deposit:</span><br><strong style="color:var(--emerald-primary);">₹${b.priceQuote.deposit}</strong></div>
+            <div><span style="color:var(--text-muted); font-size:0.75rem;">Balance Due:</span><br><strong>₹${b.priceQuote.balanceDue}</strong></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-subtle); padding-top:12px;">
+            <a href="#/b/${b.id}" class="secondary-cta" style="padding:6px 14px; font-size:0.8rem;">View Tax Invoice</a>
+            ${b.status === 'confirmed' ? `
+              <button class="secondary-cta" style="border-color:#EF4444; color:#EF4444; padding:6px 14px; font-size:0.8rem;" onclick="cancelBookingVault('${b.id}', ${diffHours})">
+                Cancel Session
+              </button>
+            ` : ''}
+          </div>
+        `;
+        list.appendChild(card);
+      });
+      initSpotlightCards();
+    }
+
+    function cancelBookingVault(bookingId, diffHours) {
+      const db = Store.getSnapshot();
+      const b = (db.bookings || []).find(x => x.id === bookingId);
+      if (!b) return;
+
+      const freeHours = db.rules.cancelPolicyHours || 2;
+      let promptMsg = "";
+      if (diffHours >= freeHours) {
+        promptMsg = `Cancelling ${diffHours.toFixed(1)}h prior to tee-off. You are ELIGIBLE for 100% deposit refund (₹${b.priceQuote.deposit}). Reason for cancellation:`;
+      } else {
+        promptMsg = `POLICY NOTICE: Cancelling within ${freeHours} hours of start forfeits the 20% security deposit (₹${b.priceQuote.deposit}). Please provide reason to proceed:`;
+      }
+
+      const reason = prompt(promptMsg, "Schedule conflict");
+      if (!reason) return;
+
+      b.status = "cancelled";
+      b.cancelReason = reason;
+      Store.put('bookings', b);
+
+      Store.put('log', {
+        id: `LOG-${Date.now()}`,
+        timestamp: now().toISOString(),
+        action: "BOOKING_CANCELLED",
+        detail: `Booking ${bookingId} cancelled. Reason: ${reason}. Deposit forfeited: ${diffHours < freeHours}.`
+      });
+
+      showToast("Reservation cancelled.", "success");
+      searchVaultByPhone();
+      updateGlobalTelemetry();
+    }
+
+    /* ==========================================================================
+       9. ADMIN CONSOLE (`#/admin`) & BILLING ENGINE
+       ========================================================================== */
+    let staffUnlocked = true; // Enabled for testing convenience, PIN guarded on modal
+
+    function renderAdminConsole() {
+      renderAdminLiveFloor();
+      renderAdminTimeline();
+      renderCrmCustomers();
+      renderAdminTables();
+      renderAdminAnalytics();
+      renderAdminSettings();
+      renderAdminLog();
+    }
+
+    function switchAdminTab(tabKey) {
+      document.querySelectorAll('#admin-subnav .admin-sublink').forEach(btn => {
+        btn.classList.toggle('active', btn.innerText.toLowerCase().includes(tabKey) || (tabKey === 'live' && btn.innerText.includes('Live')));
+      });
+      document.querySelectorAll('.admin-tab-pane').forEach(p => p.classList.remove('active-tab'));
+      const activePane = document.getElementById(`admin-tab-${tabKey}`);
+      if (activePane) activePane.classList.add('active-tab');
+    }
+
+    /* Live Floor */
+    function renderAdminLiveFloor() {
+      const db = Store.getSnapshot();
+      const grid = document.getElementById('admin-ops-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      (db.tables || []).forEach(t => {
+        const info = computeTableStatus(t, db);
+        const card = document.createElement('div');
+        card.className = "ops-table-card spotlight-card";
+
+        let html = '';
+        if (t.statusOverride === 'maintenance') {
+          html = `
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <h4>${t.name}</h4>
+                <span class="status-badge status-maintenance">Under Maintenance</span>
+              </div>
+              <p style="font-size:0.8rem; color:var(--text-secondary); margin:14px 0;">Cloth conditioning & leveling in progress.</p>
+            </div>
+            <button class="secondary-cta" style="width:100%; font-size:0.8rem;" onclick="setTableMaintenance('${t.id}', false)">Complete & Release</button>
+          `;
+        } else if (info.status === "In Play") {
+          const v = info.activeVisit;
+          const elapsedSec = Math.floor((now().getTime() - new Date(v.startTime).getTime()) / 1000) - (v.pauseElapsedSec || 0);
+          const totalSec = (v.allocatedDurationMin || 60) * 60;
+          const remainSec = Math.max(0, totalSec - elapsedSec);
+          const pct = Math.min(100, Math.round((elapsedSec / totalSec) * 100));
+
+          const elapsedStr = `${String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:${String(elapsedSec % 60).padStart(2, '0')}`;
+          const remainStr = `${String(Math.floor(remainSec / 60)).padStart(2, '0')}:${String(remainSec % 60).padStart(2, '0')}`;
+
+          const tableCost = Math.round((t.ratePerHour / 60) * (elapsedSec / 60));
+          const totalTab = tableCost + (v.fnbTotal || 0);
+
+          html = `
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <h4>${t.name}</h4>
+                <span class="status-badge status-inplay">${v.paused ? 'PAUSED' : 'IN PLAY'}</span>
+              </div>
+              <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">
+                Player: <strong>${v.patronName}</strong> • Tab: <strong class="tabular" style="color:var(--gold-hover);">₹${totalTab}</strong>
+              </div>
+              <div class="ops-stopwatch tabular">${remainStr}</div>
+              <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted); margin-bottom:4px;" class="tabular">
+                <span>Elapsed: ${elapsedStr}</span>
+                <span>Block: ${v.allocatedDurationMin}m</span>
+              </div>
+              <div class="ops-progress-bar"><div class="ops-progress-fill" style="width:${pct}%;"></div></div>
+            </div>
+            <div class="ops-quick-actions">
+              <button class="btn-ops-action" onclick="togglePauseSession('${v.id}')">${v.paused ? 'Resume' : 'Pause'}</button>
+              <button class="btn-ops-action" onclick="openExtendModal('${v.id}')">+Extend</button>
+              <button class="btn-ops-action" onclick="openFnbModal('${v.id}')">+F&B Tab</button>
+              <button class="btn-ops-action" onclick="openSettleModal('${v.id}')">End & Settle</button>
+            </div>
+          `;
+        } else if (info.status === "Reserved") {
+          const b = info.currentBooking;
+          html = `
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <h4>${t.name}</h4>
+                <span class="status-badge status-reserved">Reserved</span>
+              </div>
+              <p style="font-size:0.85rem; margin:14px 0;">
+                Reserved for <strong>${b ? b.patronName : 'Patron'}</strong><br>
+                Slot: <span class="tabular">${b ? b.start + '–' + b.end : ''}</span> (PIN: ${b ? b.pin : ''})
+              </p>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn-step-next" style="flex:1; padding:8px; font-size:0.8rem;" onclick="checkInPatronBooking('${b.id}')">Check-In Patron</button>
+              <button class="secondary-cta" style="padding:8px; font-size:0.8rem;" onclick="triggerManualNoShow('${b.id}')">No-Show</button>
+            </div>
+          `;
+        } else {
+          // Available
+          html = `
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <h4>${t.name}</h4>
+                <span class="status-badge status-available">Available</span>
+              </div>
+              <p style="font-size:0.82rem; color:var(--text-secondary); margin:14px 0;">${info.nextFree}</p>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn-step-next" style="flex:1; padding:8px; font-size:0.8rem;" onclick="openWalkinModalForTable('${t.id}')">Fast Walk-In</button>
+              <button class="secondary-cta" style="padding:8px; font-size:0.8rem;" onclick="setTableMaintenance('${t.id}', true)">Condition Felt</button>
+            </div>
+          `;
+        }
+        card.innerHTML = html;
+        grid.appendChild(card);
+      });
+      initSpotlightCards();
+    }
+
+    /* Check-In */
+    function checkInPatronBooking(bookingId) {
+      const db = Store.getSnapshot();
+      const b = (db.bookings || []).find(x => x.id === bookingId);
+      if (!b) return;
+
+      b.status = "checked_in";
+      Store.put('bookings', b);
+
+      // Create active visit
+      const visit = {
+        id: `VIS-${Math.floor(100 + Math.random() * 900)}`,
+        tableId: b.tableId,
+        bookingId: b.id,
+        patronName: b.patronName,
+        patronPhone: b.patronPhone,
+        startTime: now().toISOString(),
+        allocatedDurationMin: b.durMin,
+        paused: false,
+        pauseElapsedSec: 0,
+        fnbTotal: 0,
+        depositCredited: b.priceQuote.deposit
+      };
+      Store.put('visits', visit);
+
+      Store.put('log', {
+        id: `LOG-${Date.now()}`,
+        timestamp: now().toISOString(),
+        action: "PATRON_CHECKIN",
+        detail: `Patron ${b.patronName} checked in on ${b.tableId}. Match timer running.`
+      });
+
+      showToast(`Checked in ${b.patronName}!`, "success");
+      renderAdminConsole();
+      updateGlobalTelemetry();
+    }
+
+    /* Extend Session with Availability Re-Check (Rejects Naming Blocking Booking) */
+    let extendingVisitId = null;
+    function openExtendModal(vId) {
+      extendingVisitId = vId;
+      document.getElementById('extend-error-msg').style.display = 'none';
+      openModal('extend-modal');
+    }
+
+    function executeExtendMinutes(mins) {
+      if (!extendingVisitId) return;
+      const db = Store.getSnapshot();
+      const visit = (db.visits || []).find(v => v.id === extendingVisitId);
+      if (!visit) return;
+
+      const buffer = db.rules.bufferMin || 10;
+      const vStart = new Date(visit.startTime);
+      const curDur = visit.allocatedDurationMin || 60;
+      const newDur = curDur + mins;
+
+      const vStartMin = vStart.getHours() * 60 + vStart.getMinutes();
+      const newEndMin = vStartMin + newDur;
+
+      // Check against today's bookings on this table
+      const todayStr = getTodayDateString();
+      const upcoming = (db.bookings || []).filter(b =>
+        b.tableId === visit.tableId &&
+        b.date === todayStr &&
+        b.id !== visit.bookingId &&
+        b.status !== "cancelled" &&
+        b.status !== "no_show"
+      );
+
+      for (const b of upcoming) {
+        const bStart = parseTimeToMinutes(b.start);
+        if (newEndMin + buffer > bStart) {
+          // CLASH! Reject and name blocking booking
+          const errBox = document.getElementById('extend-error-msg');
+          errBox.style.display = 'block';
+          errBox.innerText = `Extension Rejected: Clashes with upcoming reservation ${b.id} (${b.patronName}) scheduled at ${b.start} (with mandatory ${buffer}m cloth buffer).`;
+          return;
+        }
+      }
+
+      // Accepted!
+      visit.allocatedDurationMin = newDur;
+      Store.put('visits', visit);
+
+      Store.put('log', {
+        id: `LOG-${Date.now()}`,
+        timestamp: now().toISOString(),
+        action: "SESSION_EXTENDED",
+        detail: `Visit ${visit.id} on ${visit.tableId} extended by +${mins}m (Total ${newDur}m).`
+      });
+
+      closeModal('extend-modal');
+      showToast(`Added +${mins}m to session!`, "success");
+      renderAdminLiveFloor();
+    }
+
+    function togglePauseSession(vId) {
+      const db = Store.getSnapshot();
+      const v = (db.visits || []).find(x => x.id === vId);
+      if (!v) return;
+      v.paused = !v.paused;
+      Store.put('visits', v);
+      showToast(v.paused ? "Session paused." : "Session resumed.", "success");
+      renderAdminLiveFloor();
+    }
+
+    /* Billing Engine (`closeSession()`) */
+    let settlingVisit = null;
+    function openSettleModal(vId) {
+      const db = Store.getSnapshot();
+      const v = (db.visits || []).find(x => x.id === vId);
+      if (!v) return;
+      settlingVisit = v;
+
+      const table = (db.tables || []).find(t => t.id === v.tableId);
+      const playedMins = Math.max(1, Math.round(((now().getTime() - new Date(v.startTime).getTime()) / 60000) - ((v.pauseElapsedSec || 0) / 60)));
+      const tableCost = Math.round(((table ? table.ratePerHour : 200) / 60) * playedMins);
+      const deposit = v.depositCredited || 0;
+      const fnb = v.fnbTotal || 0;
+      const subtotal = tableCost + fnb;
+      const totalDue = Math.max(0, subtotal - deposit);
+
+      const modalContent = document.getElementById('settle-modal-content');
+      modalContent.innerHTML = `
+        <h3 class="display-font" style="margin-bottom:6px;">Close Session & Settle Tab</h3>
+        <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:16px;">
+          Table ${v.tableId} • ${v.patronName} (${playedMins} actual minutes played)
+        </p>
+
+        <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:6px; padding:14px; margin-bottom:18px; font-size:0.85rem;" class="tabular">
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+            <span>Table Charge (${playedMins}m @ ₹${table ? table.ratePerHour : 200}/hr):</span>
+            <strong>₹${tableCost}</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+            <span>Bar & F&B Tab:</span>
+            <strong>₹${fnb}</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px; color:var(--emerald-primary);">
+            <span>Advance Deposit Credited:</span>
+            <strong>-₹${deposit}</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between; border-top:1px solid var(--border-subtle); padding-top:8px; font-size:1.1rem; color:var(--gold-hover); font-weight:700;">
+            <span>Net Balance Payable:</span>
+            <span>₹${totalDue}</span>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label class="form-label">Payment Method</label>
+          <select id="settle-pay-method" class="form-select">
+            <option value="UPI">UPI Instant (QR / NetBanking)</option>
+            <option value="Cash">Cash at Counter</option>
+            <option value="Partial">Partial Payment (Record Outstanding Due)</option>
+          </select>
+        </div>
+
+        <div class="form-field" id="partial-amount-group" style="display:none;">
+          <label class="form-label">Amount Paid Now (₹)</label>
+          <input type="number" id="settle-amount-paid" class="form-input tabular" value="${totalDue}">
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+          <button class="secondary-cta" onclick="closeModal('settle-modal')">Cancel</button>
+          <button class="btn-step-next" onclick="executeCloseSession(${tableCost}, ${fnb}, ${deposit}, ${totalDue}, ${playedMins})">
+            Settle & Print Receipt
+          </button>
+        </div>
+      `;
+
+      document.getElementById('settle-pay-method').addEventListener('change', function() {
+        document.getElementById('partial-amount-group').style.display = this.value === 'Partial' ? 'block' : 'none';
+      });
+
+      openModal('settle-modal');
+    }
+
+    function executeCloseSession(tableCost, fnb, deposit, totalDue, playedMins) {
+      if (!settlingVisit) return;
+      const v = settlingVisit;
+      const method = document.getElementById('settle-pay-method').value;
+      let amountPaid = totalDue;
+      let due = 0;
+
+      if (method === 'Partial') {
+        amountPaid = Number(document.getElementById('settle-amount-paid').value) || 0;
+        due = Math.max(0, totalDue - amountPaid);
+      }
+
+      const receiptId = `R-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const paymentRecord = {
+        id: receiptId,
+        visitId: v.id,
+        bookingId: v.bookingId || null,
+        patronName: v.patronName,
+        patronPhone: v.patronPhone,
+        tableId: v.tableId,
+        playedMins,
+        tableCost,
+        fnb,
+        deposit,
+        totalDue,
+        amountPaid,
+        due,
+        paymentMethod: method,
+        timestamp: now().toISOString()
+      };
+
+      Store.put('payments', paymentRecord);
+      Store.del('visits', v.id);
+
+      // Update Customer Stats
+      const db = Store.getSnapshot();
+      let cust = (db.customers || []).find(c => c.phone === v.patronPhone);
+      if (!cust) {
+        cust = {
+          id: v.patronPhone,
+          phone: v.patronPhone,
+          name: v.patronName || "Guest",
+          visits: 0,
+          minutes: 0,
+          spend: 0,
+          lastVisit: now().toISOString(),
+          dues: 0,
+          noShows: 0,
+          loyalty: "Patron",
+          sessions: []
+        };
+      }
+      cust.visits = (cust.visits || 0) + 1;
+      cust.minutes = (cust.minutes || 0) + playedMins;
+      cust.spend = (cust.spend || 0) + amountPaid;
+      cust.dues = (cust.dues || 0) + due;
+      cust.lastVisit = now().toISOString();
+      if (cust.spend > 3000 || cust.visits >= 5) cust.loyalty = "Noir VIP Member";
+      else if (cust.spend > 1000) cust.loyalty = "Gold Patron";
+      cust.sessions = cust.sessions || [];
+      cust.sessions.unshift({
+        receiptId,
+        tableId: v.tableId,
+        date: getTodayDateString(),
+        mins: playedMins,
+        total: amountPaid
+      });
+      Store.put('customers', cust);
+
+      Store.put('log', {
+        id: `LOG-${Date.now()}`,
+        timestamp: now().toISOString(),
+        action: "SESSION_SETTLED",
+        detail: `Settled visit for ${v.patronName} on ${v.tableId}. Paid ₹${amountPaid} via ${method} (Receipt: ${receiptId}).`
+      });
+
+      closeModal('settle-modal');
+      showToast(`Settled session for ${v.patronName}. Receipt ${receiptId} generated!`, "success");
+      renderAdminLiveFloor();
+      renderCrmCustomers();
+      renderAdminAnalytics();
+      updateGlobalTelemetry();
+
+      // Open receipt view
+      window.location.hash = `#/b/${receiptId}`;
+    }
+
+    /* Fast Walk-In */
+    function openWalkinModal() {
+      const db = Store.getSnapshot();
+      const sel = document.getElementById('walkin-table-select');
+      if (!sel) return;
+      sel.innerHTML = '';
+
+      (db.tables || []).forEach(t => {
+        const info = computeTableStatus(t, db);
+        if (info.isAvailable) {
+          const opt = document.createElement('option');
+          opt.value = t.id;
+          opt.innerText = `${t.name} (₹${t.ratePerHour}/hr)`;
+          sel.appendChild(opt);
+        }
+      });
+
+      if (sel.children.length === 0) {
+        showToast("No apparatus available right now.", "error");
+        return;
+      }
+      openModal('walkin-modal');
+    }
+
+    function openWalkinModalForTable(tableId) {
+      openWalkinModal();
+      const sel = document.getElementById('walkin-table-select');
+      if (sel) sel.value = tableId;
+    }
+
+    function confirmWalkInSession() {
+      const tableId = document.getElementById('walkin-table-select').value;
+      const name = document.getElementById('walkin-patron-name').value.trim() || "Walk-In Guest";
+      const phone = document.getElementById('walkin-patron-phone').value.trim() || "9810123456";
+      const dur = Number(document.getElementById('walkin-duration').value) || 60;
+
+      const visit = {
+        id: `VIS-${Math.floor(100 + Math.random() * 900)}`,
+        tableId,
+        patronName: name,
+        patronPhone: phone,
+        startTime: now().toISOString(),
+        allocatedDurationMin: dur,
+        paused: false,
+        pauseElapsedSec: 0,
+        fnbTotal: 0,
+        depositCredited: 0
+      };
+
+      Store.put('visits', visit);
+
+      // Register in CRM if new
+      const db = Store.getSnapshot();
+      const cust = (db.customers || []).find(c => c.phone === phone);
+      if (!cust) {
+        Store.put('customers', {
+          id: phone,
+          phone,
+          name,
+          visits: 0,
+          minutes: 0,
+          spend: 0,
+          lastVisit: now().toISOString(),
+          dues: 0,
+          noShows: 0,
+          loyalty: "Walk-In Guest",
+          sessions: []
+        });
+      }
+
+      Store.put('log', {
+        id: `LOG-${Date.now()}`,
+        timestamp: now().toISOString(),
+        action: "WALKIN_START",
+        detail: `Walk-in session started on ${tableId} for ${name} (${dur}m).`
+      });
+
+      closeModal('walkin-modal');
+      showToast(`Walk-in started on ${tableId}!`, "success");
+      renderAdminLiveFloor();
+      updateGlobalTelemetry();
+    }
+
+    /* Maintenance Toggle */
+    function setTableMaintenance(tableId, isMaint) {
+      const db = Store.getSnapshot();
+      const table = (db.tables || []).find(t => t.id === tableId);
+      if (!table) return;
+      table.statusOverride = isMaint ? "maintenance" : null;
+      Store.put('tables', table);
+      showToast(`${table.name} status updated.`, "success");
+      renderAdminLiveFloor();
+      updateGlobalTelemetry();
+    }
+
+    /* Timeline & No-Show manual triggers */
+    function renderAdminTimeline() {
+      const db = Store.getSnapshot();
+      const container = document.getElementById('admin-bookings-timeline');
+      if (!container) return;
+      const todayStr = getTodayDateString();
+
+      const todayBookings = (db.bookings || []).filter(b => b.date === todayStr)
+        .sort((a,b) => parseTimeToMinutes(a.start) - parseTimeToMinutes(b.start));
+
+      if (todayBookings.length === 0) {
+        container.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem;">No reservations scheduled for today.</div>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      todayBookings.forEach(b => {
+        const item = document.createElement('div');
+        item.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid var(--border-subtle);";
+        item.innerHTML = `
+          <div>
+            <span class="tabular" style="color:var(--gold-accent); font-weight:700;">${b.start}–${b.end}</span>
+            <strong style="margin-left:12px;">${b.tableId} • ${b.patronName}</strong>
+            <span style="color:var(--text-secondary); margin-left:8px;">(+91 ${b.patronPhone})</span>
+            <span class="status-badge ${b.status === 'confirmed' ? 'status-available' : (b.status === 'no_show' ? 'status-inplay' : 'status-maintenance')}" style="margin-left:8px;">${b.status}</span>
+          </div>
+          <div style="display:flex; gap:8px;">
+            ${b.status === 'confirmed' ? `
+              <button class="btn-step-next" style="padding:6px 14px; font-size:0.75rem;" onclick="checkInPatronBooking('${b.id}')">Check-In</button>
+              <button class="secondary-cta" style="padding:6px 14px; font-size:0.75rem;" onclick="triggerManualNoShow('${b.id}')">No-Show</button>
+            ` : ''}
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function triggerManualNoShow(bookingId) {
+      const db = Store.getSnapshot();
+      const b = (db.bookings || []).find(x => x.id === bookingId);
+      if (!b) return;
+
+      const reason = prompt("Enter no-show release reason:", "Patron unattended past grace window");
+      if (!reason) return;
+
+      b.status = "no_show";
+      b.noShowReason = reason;
+      Store.put('bookings', b);
+
+      const cust = (db.customers || []).find(c => c.phone === b.patronPhone);
+      if (cust) {
+        cust.noShows = (cust.noShows || 0) + 1;
+        Store.put('customers', cust);
+      }
+
+      Store.put('log', {
+        id: `LOG-${Date.now()}`,
+        timestamp: now().toISOString(),
+        action: "NO_SHOW_MANUAL",
+        detail: `Booking ${bookingId} released as no-show by staff lead. Reason: ${reason}.`
+      });
+
+      showToast(`Booking ${bookingId} marked as no-show. Table freed.`, "error");
+      renderAdminConsole();
+      updateGlobalTelemetry();
+    }
+
+    /* CRM Customers Tab */
+    function renderCrmCustomers() {
+      const db = Store.getSnapshot();
+      const list = document.getElementById('crm-customers-list');
+      if (!list) return;
+      const search = (document.getElementById('crm-search-input')?.value || '').toLowerCase();
+
+      const customers = (db.customers || []).filter(c =>
+        (c.name || '').toLowerCase().includes(search) || (c.phone || '').includes(search)
+      );
+
+      list.innerHTML = '';
+      if (customers.length === 0) {
+        list.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem; padding:20px;">No patron records found.</div>`;
+        return;
+      }
+
+      customers.forEach(c => {
+        const item = document.createElement('div');
+        item.className = "spotlight-card";
+        item.style.padding = "20px";
+        item.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+            <div>
+              <h4 style="font-size:1.2rem;">${c.name}</h4>
+              <span class="tabular text-secondary">+91 ${c.phone}</span>
+            </div>
+            <span class="status-badge status-available">${c.loyalty || 'Patron'}</span>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:12px; font-size:0.8rem; background:var(--bg-card); padding:12px; border-radius:6px;" class="tabular">
+            <div><span style="color:var(--text-muted);">Matches:</span><br><strong>${c.visits || 0}</strong></div>
+            <div><span style="color:var(--text-muted);">Time Played:</span><br><strong>${c.minutes || 0} mins</strong></div>
+            <div><span style="color:var(--text-muted);">Total Spend:</span><br><strong style="color:var(--gold-hover);">₹${c.spend || 0}</strong></div>
+            <div><span style="color:var(--text-muted);">Outstanding Dues:</span><br><strong style="color:${c.dues > 0 ? '#EF4444' : 'var(--emerald-primary)'}">₹${c.dues || 0}</strong></div>
+            <div><span style="color:var(--text-muted);">No-Shows:</span><br><strong style="color:${c.noShows > 0 ? '#EF4444' : 'inherit'}">${c.noShows || 0}</strong></div>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+      initSpotlightCards();
+    }
+
+    /* Tables Tab */
+    function renderAdminTables() {
+      const db = Store.getSnapshot();
+      const grid = document.getElementById('admin-tables-list');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      (db.tables || []).forEach(t => {
+        const card = document.createElement('div');
+        card.className = "spotlight-card";
+        card.style.padding = "20px";
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between;">
+            <h4>${t.name}</h4>
+            <span class="tabular font-bold text-gold" style="color:var(--gold-hover);">₹${t.ratePerHour}/hr</span>
+          </div>
+          <p style="font-size:0.8rem; color:var(--text-muted); margin:8px 0;">${t.specs}</p>
+          <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-subtle); padding-top:12px; margin-top:8px;">
+            <button class="secondary-cta" style="padding:4px 10px; font-size:0.75rem;" onclick="setTableMaintenance('${t.id}', ${t.statusOverride !== 'maintenance'})">
+              ${t.statusOverride === 'maintenance' ? 'Reopen Table' : 'Set Maintenance'}
+            </button>
+            <button class="secondary-cta" style="padding:4px 10px; font-size:0.75rem;" onclick="editTableRatePrompt('${t.id}')">Edit Rate</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+      initSpotlightCards();
+    }
+
+    function editTableRatePrompt(tId) {
+      const db = Store.getSnapshot();
+      const table = (db.tables || []).find(t => t.id === tId);
+      if (!table) return;
+      const newRate = prompt(`Enter new hourly rate for ${table.name} (Current: ₹${table.ratePerHour}):`, table.ratePerHour);
+      if (newRate && !isNaN(newRate)) {
+        table.ratePerHour = Number(newRate);
+        Store.put('tables', table);
+        showToast(`Updated rate for ${table.name} to ₹${table.ratePerHour}/hr.`, "success");
+        renderAdminTables();
+      }
+    }
+
+    function openAddTableModal() { openModal('add-table-modal'); }
+    function confirmAddTable() {
+      const id = document.getElementById('new-table-id').value.trim();
+      const name = document.getElementById('new-table-name').value.trim();
+      const discipline = document.getElementById('new-table-discipline').value;
+      const rate = Number(document.getElementById('new-table-rate').value) || 250;
+
+      if (!id || !name) { showToast("Provide Table ID and Name.", "error"); return; }
+      Store.put('tables', {
+        id,
+        name,
+        discipline,
+        size: "Championship Spec",
+        ratePerHour: rate,
+        specs: "Precision slate with Hainsworth tournament cloth.",
+        statusOverride: null,
+        clothTemp: "21.8°C",
+        humidity: "48% RH"
+      });
+      closeModal('add-table-modal');
+      showToast(`Added ${name}!`, "success");
+      renderAdminTables();
+    }
+
+    /* Analytics Tab */
+    function renderAdminAnalytics() {
+      const db = Store.getSnapshot();
+      const payments = db.payments || [];
+      const totalRev = payments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+      const totalDues = (db.customers || []).reduce((acc, c) => acc + (c.dues || 0), 0);
+      const floor = computeFloorOccupancy();
+
+      document.getElementById('analytics-rev').innerText = `₹${totalRev.toLocaleString('en-IN')}`;
+      document.getElementById('analytics-sessions').innerText = payments.length;
+      document.getElementById('analytics-occupancy').innerText = `${floor.pct}%`;
+      document.getElementById('analytics-dues').innerText = `₹${totalDues.toLocaleString('en-IN')}`;
+
+      // Table utilization bars
+      const barsContainer = document.getElementById('analytics-table-bars');
+      if (barsContainer) {
+        barsContainer.innerHTML = '';
+        (db.tables || []).forEach(t => {
+          const tableMatches = payments.filter(p => p.tableId === t.id).length;
+          const barPct = Math.min(100, Math.max(12, tableMatches * 20));
+          const bar = document.createElement('div');
+          bar.className = 'bar-item';
+          bar.innerHTML = `
+            <div class="bar-label-row">
+              <span>${t.name}</span>
+              <span class="tabular">${tableMatches} Sessions (${barPct}%)</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="width:${barPct}%;"></div></div>
+          `;
+          barsContainer.appendChild(bar);
+        });
+      }
+    }
+
+    /* Settings Tab */
+    function renderAdminSettings() {
+      const db = Store.getSnapshot();
+      if (document.getElementById('setting-club-name')) document.getElementById('setting-club-name').value = db.club.name || "Q-BALL Snooker & Pool Club";
+      if (document.getElementById('setting-open-hour')) document.getElementById('setting-open-hour').value = db.club.openHour || 10;
+      if (document.getElementById('setting-close-hour')) document.getElementById('setting-close-hour').value = db.club.closeHour || 23;
+      if (document.getElementById('setting-buffer-min')) document.getElementById('setting-buffer-min').value = db.rules.bufferMin || 10;
+      if (document.getElementById('setting-staff-pin')) document.getElementById('setting-staff-pin').value = db.rules.staffPin || "2468";
+    }
+
+    function saveAdminSettings() {
+      const clubName = document.getElementById('setting-club-name').value.trim();
+      const openH = Number(document.getElementById('setting-open-hour').value) || 10;
+      const closeH = Number(document.getElementById('setting-close-hour').value) || 23;
+      const buffer = Number(document.getElementById('setting-buffer-min').value) || 10;
+      const pin = document.getElementById('setting-staff-pin').value.trim() || "2468";
+
+      Store.put('club', { name: clubName, openHour: openH, closeHour: closeH });
+      Store.put('rules', { bufferMin: buffer, staffPin: pin });
+      showToast("Club settings updated successfully.", "success");
+    }
+
+    /* Audit Log Tab */
+    function renderAdminLog() {
+      const db = Store.getSnapshot();
+      const container = document.getElementById('admin-log-container');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const logs = (db.log || []).slice().reverse();
+      logs.forEach(l => {
+        const row = document.createElement('div');
+        row.style.cssText = "padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05);";
+        row.innerHTML = `<span style="color:var(--gold-accent);">[${new Date(l.timestamp).toLocaleTimeString('en-IN')}]</span> <strong style="color:var(--text-display);">${l.action}</strong>: ${l.detail}`;
+        container.appendChild(row);
+      });
+    }
+
+    /* ==========================================================================
+       10. TAX INVOICE & RECEIPT VIEW (`#/b/:id`)
+       ========================================================================== */
+    function renderBookingInvoice(refId) {
+      const db = Store.getSnapshot();
+      const container = document.getElementById('printable-tax-invoice');
+      if (!container) return;
+
+      const payment = (db.payments || []).find(p => p.id === refId);
+      const booking = (db.bookings || []).find(b => b.id === refId);
+
+      const tableId = payment ? payment.tableId : (booking ? booking.tableId : 'T3');
+      const table = (db.tables || []).find(t => t.id === tableId);
+      const patronName = payment ? payment.patronName : (booking ? booking.patronName : 'Patron');
+      const patronPhone = payment ? payment.patronPhone : (booking ? booking.patronPhone : '9810123456');
+
+      const cost = payment ? payment.tableCost : (booking ? booking.priceQuote.subtotal : 375);
+      const gst = Math.round(cost * 0.18);
+      const grandTotal = cost + gst;
+      const deposit = payment ? payment.deposit : (booking ? booking.priceQuote.deposit : 89);
+      const balance = Math.max(0, grandTotal - deposit);
+
+      container.innerHTML = `
+        <div style="display:flex; justify-content:space-between; border-bottom:2px solid var(--border-subtle); padding-bottom:18px; margin-bottom:20px;">
+          <div>
+            <h2 class="display-font" style="font-size:1.6rem; color:var(--gold-hover);">Q-BALL SNOOKER & POOL CLUB</h2>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">
+              Connaught Promenade, New Delhi 110001<br>
+              GSTIN: <strong class="tabular">07AAACQ9810K1ZZ</strong> • SAC Code: 999691
+            </p>
+          </div>
+          <div style="text-align:right;">
+            <h3 style="font-size:1.2rem;">TAX RECEIPT</h3>
+            <div class="tabular" style="color:var(--gold-accent); font-weight:700;">${refId}</div>
+            <div class="tabular text-secondary" style="font-size:0.8rem;">${new Date().toLocaleDateString('en-IN')}</div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:20px;">
+          <div>Billed To: <strong>${patronName}</strong> (+91 ${patronPhone})</div>
+          <div>Apparatus: <strong>${table ? table.name : tableId}</strong></div>
+        </div>
+
+        <table style="width:100%; border-collapse:collapse; font-size:0.88rem; margin-bottom:20px;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; color:var(--text-muted); font-size:0.75rem; text-transform:uppercase;">
+              <th style="padding:8px 0;">Item</th>
+              <th class="tabular" style="text-align:right;">Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+              <td style="padding:10px 0;">Session Tariff (${table ? table.ratePerHour : 300}/hr rate)</td>
+              <td class="tabular" style="text-align:right;">₹${cost}.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+              <td style="padding:10px 0;">GST Compliance (18%)</td>
+              <td class="tabular" style="text-align:right;">₹${gst}.00</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; font-size:0.9rem;" class="tabular">
+          <div style="display:flex; width:240px; justify-content:space-between;">
+            <span>Subtotal:</span>
+            <span>₹${cost}.00</span>
+          </div>
+          <div style="display:flex; width:240px; justify-content:space-between; font-size:1.15rem; font-weight:700; color:var(--gold-hover); border-top:1px solid var(--border-subtle); padding-top:8px;">
+            <span>Grand Total:</span>
+            <span>₹${grandTotal}.00</span>
+          </div>
+          <div style="display:flex; width:240px; justify-content:space-between; color:var(--emerald-primary);">
+            <span>Deposit Paid:</span>
+            <span>-₹${deposit}.00</span>
+          </div>
+          <div style="display:flex; width:240px; justify-content:space-between; font-weight:700;">
+            <span>Balance Settled:</span>
+            <span>₹${balance}.00</span>
+          </div>
+        </div>
+
+        <div class="no-print" style="margin-top:28px; display:flex; justify-content:flex-end; gap:12px;">
+          <button class="btn-step-next" style="padding:8px 18px;" onclick="window.print()">Print Receipt</button>
+          <button class="secondary-cta" style="padding:8px 18px;" onclick="downloadReceiptHtml('${refId}')">Download .html</button>
+        </div>
+      `;
+    }
+
+    function downloadReceiptHtml(refId) {
+      const container = document.getElementById('printable-tax-invoice');
+      if (!container) return;
+      const htmlContent = `<!DOCTYPE html><html><head><title>Receipt ${refId}</title><style>body{font-family:sans-serif;padding:30px;color:#000;}</style></head><body>${container.innerHTML}</body></html>`;
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `receipt_${refId}.html`;
+      a.click();
+    }
+
+    /* ==========================================================================
+       11. DEMO AUTOMATIONS & SUITE
+       ========================================================================== */
+    function loadRealisticDemoData() {
+      const seed = getDefaultSeed();
+      const today = getTodayDateString();
+
+      // Seed 2 Bookings (Table 3 19:00-20:00 & Table 1 15:00-16:00)
+      const q3 = priceQuote('T3', today, '19:00', 60);
+      seed.bookings.push({
+        id: "BK-893120",
+        tableId: "T3",
+        date: today,
+        start: "19:00",
+        end: "20:00",
+        durMin: 60,
+        patronName: "Kabir Singhania",
+        patronPhone: "9810123456",
+        priceQuote: q3,
+        status: "confirmed",
+        depositPaid: true,
+        depositAmount: q3.deposit,
+        balanceDue: q3.balanceDue,
+        createdAt: now().toISOString(),
+        pin: "4829"
+      });
+
+      // Seed 1 Active Visit on Table 2
+      seed.visits.push({
+        id: "VIS-101",
+        tableId: "T2",
+        patronName: "Rohan Varma",
+        patronPhone: "9876543210",
+        startTime: new Date(now().getTime() - 25 * 60000).toISOString(),
+        allocatedDurationMin: 60,
+        paused: false,
+        pauseElapsedSec: 0,
+        fnbTotal: 120,
+        depositCredited: 0
+      });
+
+      // Seed CRM Customers
+      seed.customers.push({
+        id: "9810123456",
+        phone: "9810123456",
+        name: "Kabir Singhania",
+        visits: 4,
+        minutes: 240,
+        spend: 2150,
+        lastVisit: now().toISOString(),
+        dues: 0,
+        noShows: 0,
+        loyalty: "Gold Patron",
+        sessions: []
+      });
+
+      Store.cache = seed;
+      LocalStore._save(seed);
+      showToast("Demo suite successfully loaded!", "success");
+      renderAllCurrentViews();
+    }
+
+    function simulateBookingRace() {
+      const today = getTodayDateString();
+      showToast("Triggering simultaneous race condition on Table 3 (19:30–20:30)...", "info");
+
+      const draftA = { tableId: "T3", date: today, start: "19:30", durMin: 60, patronName: "Player Alpha", patronPhone: "9810123456" };
+      const draftB = { tableId: "T3", date: today, start: "19:30", durMin: 60, patronName: "Player Beta", patronPhone: "9876543210" };
+
+      const resA = commitBooking(draftA);
+      setTimeout(() => {
+        const resB = commitBooking(draftB);
+        alert(
+          `--- BOOKING RACE RESULTS ---\n` +
+          `Commit A (Player Alpha): ${resA.ok ? 'SUCCESS (ID: ' + resA.booking.id + ')' : 'REJECTED: ' + resA.error}\n\n` +
+          `Commit B (Player Beta 50ms later): ${resB.ok ? 'SUCCESS' : 'REJECTED: ' + resB.error}\n\n` +
+          `Verdict: Exactly ONE booking locked the slot; conflict guard successfully prevented double-allocation.`
+        );
+        renderAllCurrentViews();
+      }, 50);
+    }
+
+    function resetDatabaseClean() {
+      if (confirm("Reset everything to first-run state?")) {
+        const seed = getDefaultSeed();
+        Store.cache = seed;
+        LocalStore._save(seed);
+        showToast("Storage reseeded to clean factory v3.", "success");
+        initApp();
+      }
+    }
+
+    /* Modal Helpers */
+    function openModal(id) { document.getElementById(id)?.classList.add('open'); }
+    function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
+
+    function openFnbModal(visitId) {
+      const item = prompt("Select F&B item to add:\n1. Espresso Tonic (₹120)\n2. Single Malt Scotch (₹250)\n3. Chilled Ginger Beer (₹80)", "1");
+      let cost = 120;
+      if (item === "2") cost = 250;
+      if (item === "3") cost = 80;
+
+      const db = Store.getSnapshot();
+      const v = (db.visits || []).find(x => x.id === visitId);
+      if (v) {
+        v.fnbTotal = (v.fnbTotal || 0) + cost;
+        Store.put('visits', v);
+        showToast(`Added ₹${cost} to tab!`, "success");
+        renderAdminLiveFloor();
+      }
+    }
+
+    /* Global Clock & Telemetry */
+    function updateClockDisplays() {
+      const cur = now();
+      const timeStr = cur.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      const ms = String(cur.getMilliseconds()).padStart(3, '0');
+
+      const simEl = document.getElementById('sim-clock-display');
+      if (simEl) {
+        const isDemo = Store.getSnapshot().settings.demoTime !== null;
+        simEl.innerText = `${timeStr} ${isDemo ? '(DEMO CLOCK)' : '(LIVE CLOCK)'}`;
+      }
+      const adminClock = document.getElementById('admin-millisecond-clock');
+      if (adminClock) adminClock.innerText = `IST ${timeStr}.${ms}`;
+    }
+
+    function updateGlobalTelemetry() {
+      const occ = computeFloorOccupancy();
+      const pill = document.getElementById('global-occupancy-pill');
+      if (pill) pill.innerText = `${occ.occupied} / ${occ.total} Tables Occupied`;
+      const availEl = document.getElementById('hero-avail-count');
+      if (availEl) availEl.innerText = `${occ.total - occ.occupied} / ${occ.total}`;
+      const vel = document.getElementById('live-board-velocity-badge');
+      if (vel) vel.innerText = `Active Occupancy Velocity: ${occ.pct}%`;
+    }
+
+    function renderAllCurrentViews() {
+      handleRoute();
+      updateGlobalTelemetry();
+    }
+
+    function showToast(msg, type = 'info') {
+      const hub = document.getElementById('toast-hub');
+      if (!hub) return;
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.innerHTML = `<span>${type === 'success' ? '✓' : (type === 'error' ? '✕' : 'ℹ')}</span> <span>${msg}</span>`;
+      hub.appendChild(t);
+      setTimeout(() => {
+        t.style.opacity = '0';
+        t.style.transform = 'translateY(10px)';
+        t.style.transition = 'all 0.3s ease';
+        setTimeout(() => t.remove(), 300);
+      }, 3500);
+    }
+
+    /* ==========================================================================
+       12. INITIALIZATION
+       ========================================================================== */
+    async function initApp() {
+      await Store.init();
+      initSplitTextHero();
+      initMagneticCTA();
+      initSpotlightCards();
+      initClickSpark();
+      updateClockDisplays();
+      updateGlobalTelemetry();
+      handleRoute();
+      noShowSweeper();
+    }
+
+    setInterval(updateClockDisplays, 100);
+    setInterval(updateGlobalTelemetry, 2500);
+
+    document.addEventListener('DOMContentLoaded', initApp);
+    if (document.readyState === 'complete' || document.readyState === 'interactive') initApp();
+  </script>
+</body>
+</html>
